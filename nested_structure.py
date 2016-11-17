@@ -302,7 +302,7 @@ class cluster:
         else: return counter
 
     def label_within_solid(self, i):
-        if self.sites_contained==[]: return i
+        if self.sites_contained==[]: return copy(i)
         assert len(self.sites_contained)>i, "there's not so many sites"
         x0 = self.sites_contained[i][0]
         y0 = self.sites_contained[i][1]
