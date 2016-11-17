@@ -184,7 +184,7 @@ def nested_calculation( clusters,
                  monitor( monitored_quantity = lambda: dt.err, 
                           h5key = 'err_vs_it', 
                           archive_name = dt.archive_name),
-                 monitor( monitored_quantity = lambda: actions[2].err, 
+                 monitor( monitored_quantity = lambda: actions[2].errs[0], 
                           h5key = 'sign_err_vs_it', 
                           archive_name = dt.archive_name) ]
     

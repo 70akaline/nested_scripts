@@ -250,14 +250,15 @@ class cluster:
     def get_ordered(self, point=None):     #point is auxiliary variable - get's transformed together with sites_contained
         #print "get_ordered: self.Lx: ",self.Lx," self.Ly: ",self.Ly
         ordered_sites_contained = deepcopy(self.sites_contained)
-        maxes = [0,1]
+        maxes = [[0,1],[0],[1]]
         lx,ly = copy(self.Lx), copy(self.Ly)
         x,y = copy(self.x),copy(self.y)
         if not self.is_00_ordered():
             #print "not 00 ordered!"
             mirror_sites_and_shift_to_positive(ordered_sites_contained,axis=[0])
-            maxes = [1] #if it is necessary to mirror x to get [0,0], don't mirro back to satisfy max total x
+            #maxes = [[1]] #if it is necessary to mirror x to get [0,0], don't mirro back to satisfy max total x
             if not (point is None): point[0] = 2*x+lx-point[0]-1
+        #print ordered_sites_contained        
         if not self.is_LxLy_ordered(): 
             #print "not ordered!"      
             #print "not LxLy ordered!"
@@ -267,18 +268,21 @@ class cluster:
             x,y = y,x
             if not (point is None): point[0],point[1] = point[1],point[0]
         for ma in maxes:                
-            assert (ma==0) or (ma==1), "we're in 2D"
-            if not cluster(0,0,lx,ly, ordered_sites_contained).is_totalxy_ordered(axis=[ma]):
-                #print "not totalxy ordered!"
-                mirror_sites_and_shift_to_positive(ordered_sites_contained,axis=[ma])
+            #assert (ma==0) or (ma==1), "we're in 2D"
+            if not cluster(0,0,lx,ly, ordered_sites_contained).is_totalxy_ordered(axis=ma):
+                #print "not totalxy ordered!", ma
+                mirror_sites_and_shift_to_positive(ordered_sites_contained,axis=ma)
+                #print ordered_sites_contained    
                 if not (point is None):
-                    if ma==0: 
+                    if 0 in ma: 
                         L = lx
                         r = x
-                    elif ma==1: 
-                        L = Ly
+                        point[0] = 2*r+L-point[0]-1
+                    if 1 in ma: 
+                        L = ly
                         r = y
-                    point[ma] = 2*r+L-point[ma]-1
+                        point[1] = 2*r+L-point[1]-1
+                    
         return cluster(x,y,lx,ly, ordered_sites_contained)
     
     def label_within(self,x0,y0):
@@ -296,6 +300,21 @@ class cluster:
         #print "counter: ",counter        
         if not found: return -1
         else: return counter
+
+    def label_within_solid(self, i):
+        if self.sites_contained==[]: return i
+        assert len(self.sites_contained)>i, "there's not so many sites"
+        x0 = self.sites_contained[i][0]
+        y0 = self.sites_contained[i][1]
+        return cluster(0,0,self.Lx,self.Ly, sites_contained=[]).label_within(x0,y0)
+    
+    def label_within_non_solid(self, i):
+        if self.sites_contained == []: return copy(i)
+        x0 = i % self.Lx
+        y0 = i / self.Lx
+        for l in range(len(self.sites_contained)):
+            if self.sites_contained[l] == [x0,y0]: return l
+        return -1
         
     def label_within_ordered(self,x0,y0):
         point = [copy(x0), copy(y0)]
@@ -550,6 +569,7 @@ def get_all_contributions(x1,y1, clusters):
     for cluster in clusters:
       shifts.extend(get_all_shifts_and_rotations(x1,y1, cluster))
     overlaps = get_all_overlaps(shifts)
+    #print overlaps
     contributions = []
     for A in shifts+overlaps:
         #find the indices of sites within ordered cluster (Lx>=Ly), here we assume symmetry x <-> y
@@ -559,16 +579,18 @@ def get_all_contributions(x1,y1, clusters):
         assert (i>=0) and (j>=0), "must be found in cluster"
         #now we use the lowest i index by applying cluster symmetries
         B = A.get_ordered()                
-        assert B.is_ordered(), "B is not ordered, something fishy"
+        assert B.is_ordered(), "B is not ordered, something fishy: A:"+str(A)+" B: "+str(B)
         #print "B.Lx: ",B.Lx," B.Ly: ",B.Ly
         #H_0 = initCubicTBH(copy(B.Lx), copy(B.Ly), 1, -1, -0.25, cyclic=False)
         #print H_0
+        
         ips = get_identical_pair_sets(copy(B.Lx), copy(B.Ly))        
         #print ips
         found = False
         for ip in ips:
-            if [i,j] in ip:
-                i,j = copy(ip[0][0]),copy(ip[0][1])
+            if [B.label_within_solid(i),B.label_within_solid(j)] in ip:
+                i,j = B.label_within_non_solid(ip[0][0]),B.label_within_non_solid(ip[0][1])
+                assert (i!=-1) and (j!=-1), "must be found in the cluster"
                 found = True
         assert found, "something fishy, should be in pair list"        
         #add contribution
@@ -582,7 +604,7 @@ def get_all_contributions(x1,y1, clusters):
                 break
         if not found: 
             contributions.append(contribution(A.prefactor,i,j,B.Lx, B.Ly, B.sites_contained))       
-    return get_unique_non_zero_contributions(contributions)    
+    return get_unique_non_zero_contributions(contributions)      
 
 #############################################################################################################################
             

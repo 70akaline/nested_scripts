@@ -36,6 +36,7 @@ class generic_action:
     for mixer in mixers:
       mixer.get_initial()
     self.cautionaries = cautionaries
+    self.allowed_errors = allowed_errors
     self.printout = printout
     self.err = False
     self.errs = [False for c in cautionaries] 
@@ -55,7 +56,7 @@ class generic_action:
       self.err = False
       for caut in self.cautionaries:
         err = self.errs[self.cautionaries.index(caut)] = caut(data, it)
-        self.err = ( (err and (not (caut in allowed_errors))) or self.err) #if already true, do not revert back to false        
+        self.err = ( (err and (not (caut in self.allowed_errors))) or self.err) #if already true, do not revert back to false        
 
       times.append((time(),"printout"))
       self.printout(data,it)
