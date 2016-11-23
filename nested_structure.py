@@ -683,5 +683,17 @@ class nested_struct:
             ry2 = c.sites_contained[j][1]
         return [rx1-rx2,ry1-ry2] 
     
-        
+    def get_identical_pairs(self):
+        identical_pairs = {}
+        for c in self.all_contribs:
+            if c.name() in identical_pairs.keys(): continue
+            ipss = get_identical_pair_sets(c.Lx,c.Ly)
+            if c.sites_contained != []:
+                C = cluster(0,0, c.Lx, c.Ly, sites_contained = c.sites_contained) 
+                for ips in ipss:
+                    for ip in ips:
+                        ip[0] = C.label_within_non_solid(ip[0]) 
+                        ip[1] = C.label_within_non_solid(ip[1])             
+            identical_pairs[c.name()] = ipss
+        return identical_pairs
 

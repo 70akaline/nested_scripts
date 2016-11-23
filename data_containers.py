@@ -510,3 +510,31 @@ class nested_data(local_data,non_local_data):
     local_data.change_beta(self, beta_new, n_iw_new, finalize = False)
     non_local_data.change_beta(self, beta_new, n_iw_new, finalize = True)
 
+class cumul_nested_data(nested_data):
+  def __init__(self, n_iw = 100, 
+                     n_k = 12, 
+                     beta = 10.0, 
+                     impurity_struct = {'1x1': [0], '1x2': [0,1], '2x2': [0,1,2,3]},
+                     fermionic_struct = {'up': [0]},
+                     archive_name="dmft.out.h5"):
+    nested_data.__init__(self, n_iw, n_k, beta, impurity_struct, fermionic_struct, archive_name)
+    cumul_nested_data.promote()
+
+  def promote(self):
+    self.gkw = {}
+    self.gijw = {}
+    for U in self.fermionic_struct.keys():
+      if mpi.is_master_node(): print "constructing cumulants, block: ", U
+      self.gkw[U] = numpy.zeros((self.nw, self.n_k, self.n_k), dtype=numpy.complex_)
+      self.gijw[U] = numpy.zeros((self.nw, self.n_k, self.n_k), dtype=numpy.complex_)
+    cumulants = ['gkw', 'gijw']
+    self.non_local_fermionic_gfs.extend( cumulants ) 
+    self.non_local_quantities.extend( cumulants )
+
+    self.g_imp_iw = copy.deepcopy(self.Sigma_imp_iw)
+    self.g_imp_iw << 0.0
+    self.impurity_fermionic_gfs.append('g_imp_iw')
+    self.local_quantities.append('g_imp_iw') 
+
+
+

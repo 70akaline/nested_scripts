@@ -34,13 +34,19 @@ class solvers:
     @staticmethod
     def initialize_solvers(data, solver_data_package = None):
       if solver_data_package is None: solver_data_package = {}
+      
+      n_tau = 2000 
+      for C in data.impurity_struct.keys():
+        if len(data.impurity_struct[C])>16: 
+          n_tau=1000
+      assert n_tau>2*data.n_iw, "solvers.ctint.initialize_solvers: ERROR! n_tau too small!!" 
 
       solver_data_package['impurity_struct'] = data.impurity_struct
       solver_data_package['constructor_parameters']={}
       solver_data_package['constructor_parameters']['beta'] = data.beta
       solver_data_package['constructor_parameters']['n_iw'] = data.n_iw
-      solver_data_package['constructor_parameters']['n_tau_g0'] = 2000
-      solver_data_package['constructor_parameters']['n_tau_f'] = 2000
+      solver_data_package['constructor_parameters']['n_tau_g0'] = n_tau
+      solver_data_package['constructor_parameters']['n_tau_f'] = n_tau
       solver_data_package['constructor_parameters']['n_tau_dynamical_interactions'] = 3
       solver_data_package['constructor_parameters']['n_iw_dynamical_interactions'] = 1
       solver_data_package['constructor_parameters']['n_tau_nnt'] = 5

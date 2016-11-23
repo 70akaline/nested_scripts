@@ -55,8 +55,9 @@ class generic_action:
       times.append((time(),"cautionaries"))
       self.err = False
       for caut in self.cautionaries:
-        err = self.errs[self.cautionaries.index(caut)] = caut(data, it)
-        self.err = ( (err and (not (caut in self.allowed_errors))) or self.err) #if already true, do not revert back to false        
+        ind = self.cautionaries.index(caut)  
+        err = self.errs[ind] = caut(data, it)
+        self.err = ( (err and (not (ind in self.allowed_errors))) or self.err) #if already true, do not revert back to false        
 
       times.append((time(),"printout"))
       self.printout(data,it)
@@ -222,7 +223,7 @@ class converger:
     if self.func is None:
       self.check_gf()
     else:
-      func(self)
+      self.func(self)
 
     del self.mq_old
     self.get_initial()
@@ -245,14 +246,15 @@ class converger:
       diff = abs(self.mq()[key].data[:,:,:] - self.mq_old[key].data[:,:,:])                
       md = numpy.amax(diff)
       if md > max_diff: max_diff = md
-
-#      for a in self.struct[key]: 
-#        for b in self.struct[key]: 
-#          for i in range(len(self.mq()[key].data[:,a,b])):
-#            diff = abs(self.mq()[key].data[i,a,b] - self.mq_old[key].data[i,a,b])   
-#            if diff>max_diff:
-#              max_diff=diff
     self.diffs.append(max_diff)         
+
+  def check_numpy_array(self):
+    max_diff = 0 
+    diff = numpy.abs(self.mq() - self.mq_old)                
+    md = numpy.amax(diff)
+    if md > max_diff: max_diff = md
+    self.diffs.append(max_diff)         
+
 
 class monitor:
   def __init__(self, monitored_quantity, h5key, func=None, struct=None, archive_name=None):

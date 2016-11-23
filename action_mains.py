@@ -16,11 +16,6 @@ class nested_mains:
 
   @staticmethod 
   def lattice(data, n, ph_symmetry, accepted_mu_range=[-2.0,2.0]):
-    def get_n(dt):
-      dt.get_Gkw() 
-      dt.get_G_loc() #gets G_loc from Gkw
-      dt.get_n_from_G_loc()     
-
     if mpi.is_master_node(): print "GW_mains: lattice:  n: ",n,", ph_symmetry",ph_symmetry, "accepted mu_range: ",accepted_mu_range
 
     if (n is None) or ((n==0.5) and ph_symmetry):
@@ -28,7 +23,7 @@ class nested_mains:
         if mpi.is_master_node(): print "no mu search to be performed!"
         #data.mus['up'] = 0
         #if 'down' in data.fermionic_struct.keys(): data.mus['down'] = data.mus['up']  
-        get_n(data)
+        data.get_n()
     else:
       def func(var, data):
         mu = var[0]
@@ -37,7 +32,7 @@ class nested_mains:
         n= data[1] 
         dt.mus['up'] = mu
         if 'down' in dt.fermionic_struct.keys(): dt.mus['down'] = dt.mus['up']
-        get_n(dt)        #print "funcvalue: ",-abs(n - dt.ns['up'])  
+        dt.get_n()        #print "funcvalue: ",-abs(n - dt.ns['up'])  
 
         val = 1.0-abs(n - dt.ns['up'])  
         if mpi.is_master_node(): print "amoeba func call: val = ",val
@@ -75,7 +70,7 @@ class nested_mains:
           if mpi.is_master_node(): print "using mu: ", mu_grid[mui_max]
           data.mus['up'] = mu_grid[mui_max]
           if 'down' in data.fermionic_struct.keys(): data.mus['down'] = data.mus['up']
-          get_n(data)
+          data.get_n()
              
       if mpi.is_master_node() and found:
         print "guesses tried: ", l  
@@ -102,3 +97,15 @@ class nested_mains:
       if mpi.is_master_node(): print "nested_mains.impurity: launching impurity",C
       solvers.ctint.run(data, C, U, symmetrize_quantities, alpha, delta, n_cycles, max_times[C], solver_data_package)
       
+
+class cumul_nested_mains:
+  @staticmethod 
+  def cumulant(data, mapping = lambda C,x,y: [0,0,0]): #[i,j,coef]
+    data.get_g_imp()
+    data.get_gijw()
+    data.get_gkw()
+
+  @staticmethod 
+  def selfenergy(data, mapping = lambda C,x,y: [0,0,0]): #[i,j,coef]
+    data.get_Sigmakw()
+

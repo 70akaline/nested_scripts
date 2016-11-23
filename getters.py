@@ -12,6 +12,7 @@ from pytriqs.arrays import BlockMatrix, BlockMatrixComplex
 import pytriqs.utility.mpi as mpi
 
 import numpy
+from numpy.linalg import inv
 
 from math import cos
 import cmath
@@ -144,11 +145,18 @@ def full_fill_Gkw_from_iws_mus_epsiolonk_and_Sigmakw(Gkw, iws, mus, epsilonk, Si
     Gkw[U] = blockwise_get_Gkw_from_iws_mu_epsiolonk_and_Sigmakw(iws,mus[U],epsilonk[U],Sigmakw[U])
   if mpi.is_master_node(): print "done!"
 
+def full_fill_Gkw_from_epsiolonk_and_gkw(Gkw, epsilonk, gkw):
+  if mpi.is_master_node(): print "full_fill_Gkw_from_epsiolonk_and_gkw"
+  for U in Gkw.keys():
+    invG = gkw[U]**(-1.0)
+    invG -= epsilonk[U]
+    Gkw[U][:,:,:] = invG**(-1.0)
+
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------#
 #                                        weiss_field
 #-----------------------------------------------------------------------------------------------------------------------------------------------#
-from numpy.linalg import inv
+
 
 def blockwise_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw(Gweiss_iw,Gijw,Sigma_imp_iw, mapping = lambda i,j: [0,0]):
   if mpi.is_master_node(): print "blockwise_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw"
@@ -180,7 +188,7 @@ def full_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw(Gweiss_iw,Gijw,Sigma_imp_iw, 
   
 def full_fill_Sigmaijw_from_Sigma_imp_iw(Sigmaijw, Sigma_imp_iw, mapping):
   if mpi.is_master_node(): print "full_fill_Sigmaijw_from_Sigma_imp_iw"
-  impurity_blocks = [name for name, g in Sigma_imp_iw]
+  #impurity_blocks = [name for name, g in Sigma_imp_iw] don't need this
   for U in Sigmaijw.keys():
     nk = len(Sigmaijw[U][0,0,:])
     Sigmaijw[U][:,:,:] = 0.0
@@ -193,5 +201,27 @@ def full_fill_Sigmaijw_from_Sigma_imp_iw(Sigmaijw, Sigma_imp_iw, mapping):
             i = mp[2]
             j = mp[3]
             Sigmaijw[U][:,x,y] += pref * Sigma_imp_iw[C].data[:,i,j]
+
+
+#-----------------------------------------------------------------------------------------------------------------------------------------------#
+#                                        cumulant
+#-----------------------------------------------------------------------------------------------------------------------------------------------#
+
+def full_fill_g_imp_iw_from_Sigma_imp_iw(g_imp_iw, mu, Sigma_imp_iw):
+  if mpi.is_master_node(): print "full_fill_g_imp_iw_from_Sigma_imp_iw"
+  impurity_blocks = [name for name, g in Sigma_imp_iw] 
+  iws = numpy.array([ w for w in Sigma_imp_iw[impurity_blocks[0]].mesh ])
+  nw = len(iws)
+  for C in impurity_blocks:
+    Nc = len(g_imp_iw[C].data[0,0,:])
+    for l in range(nw):
+      g_imp_iw[C].data[l,:,:] = inv( (iws[l]+mu)*numpy.identity(Nc) - Sigma_imp_iw[C].data[l,:,:] )
+
+def full_fill_Sigmakw_from_gkw(Sigmakw, ws, mu, gkw):
+  if mpi.is_master_node(): print "full_fill_Sigmakw_from_gkw"
+  for U in Sigmakw.keys():
+     invSigma = -gkw[U]**(-1.0)
+     numpy.transpose(invSigma)[:] += 1j*numpy.array(ws[:])+mu
+     Sigmakw[U][:,:,:] = invSigma
 
 

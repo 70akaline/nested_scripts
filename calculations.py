@@ -24,6 +24,7 @@ def nested_calculation( clusters,
                         ns = [0.5], fixed_n = True,
                         mutildes = [0.0],
                         dispersion = lambda kx, ky: epsilonk_square(kx,ky, 0.25), ph_symmetry = True,
+                        use_cumulant = False, 
                         n_ks = [24], n_k_automatic = False, n_k_rules = [[0.06, 32],[0.03, 48],[0.005, 64],[0.00, 96]],
                         w_cutoff = 20.0,
                         min_its = 5, max_its=25, 
@@ -38,7 +39,7 @@ def nested_calculation( clusters,
                         initial_guess_archive_name = '', suffix=''):
 
   if mpi.is_master_node():
-    print "WELCOME TO nested calculation!"
+    print "WELCOME TO %snested calculation!"%("cumul_" if use_cumulant else "")
     if n_k_automatic: print "n_k automatic!!!"
   if len(n_ks)==0 and n_k_automatic: n_ks=[0]
 
@@ -78,6 +79,9 @@ def nested_calculation( clusters,
                      impurity_struct = impurity_struct,
                      fermionic_struct = fermionic_struct,
                      archive_name="so_far_nothing_you_shouldnt_see_this_file"  )
+  if use_cumulant:
+    dt.__class__ = cumul_nested_data
+    dt.promote() 
 
   if fixed_n:
     ps = itertools.product(n_ks,ns,Us,Ts)
@@ -133,18 +137,25 @@ def nested_calculation( clusters,
       else:
         print "Working: U: %s T %s mutilde: %s n_k: %s n_iw: %s"%(U,mutilde,T,nk,n_iw)
 
+    if mpi.is_master_node():
+      print "about to fill dispersion. ph-symmetry: ",ph_symmetry 
     for key in dt.fermionic_struct.keys():
       for kxi in range(dt.n_k):
         for kyi in range(dt.n_k):
           dt.epsilonk[key][kxi,kyi] = dispersion(dt.ks[kxi], dt.ks[kyi])
 
-    prepare_nested( dt, nested_scheme )
+    if not use_cumulant: 
+      prepare = prepare_nested
+    else: 
+      prepare = prepare_cumul_nested
+    prepare( dt, nested_scheme )
+
     solvers.ctint.initialize_solvers( dt, solver_data_package )
     if time_rules_automatic:
       max_times = {} 
       for C in dt.impurity_struct.keys():
         Nc = len(dt.impurity_struct[C])
-        pref = ((dt.beta/8.0)*U*Nc)**1.2
+        pref = ((dt.beta/8.0)*U*Nc)**0.7 #**1.2
         print C
         print "Nc: ",Nc,
         print "U: ", U,  
@@ -166,7 +177,8 @@ def nested_calculation( clusters,
                     printout = lambda data, it: (data.dump_general( quantities = ['Gweiss_iw'], suffix='-current' ) if ((it+1) % print_current==0) else None)  ),
                 generic_action(  name = "impurity",
                     main = lambda data: nested_mains.impurity(data, U, symmetrize_quantities = True, alpha=alpha, delta=delta, n_cycles=n_cycles, max_times = max_times, solver_data_package = solver_data_package ),
-                    mixers = [], cautionaries = [lambda data,it: local_nan_cautionary(data, data.impurity_struct, Qs = ['Sigma_imp_iw'], raise_exception = True)], allowed_errors = [],    
+                    mixers = [], cautionaries = [lambda data,it: local_nan_cautionary(data, data.impurity_struct, Qs = ['Sigma_imp_iw'], raise_exception = True),
+                                                 lambda data,it: symmetrize_cluster_impurity(data.Sigma_imp_iw, nested_scheme.get_identical_pairs())], allowed_errors = [1],    
                     printout = lambda data, it: ( [ data.dump_general( quantities = ['Sigma_imp_iw','G_imp_iw'], suffix='-current' ),
                                                     data.dump_solvers(suffix='-current')
                                                   ] if ((it+1) % print_current==0) else None)  ),
@@ -174,6 +186,14 @@ def nested_calculation( clusters,
                     main = lambda data: nested_mains.selfenergy(data), 
                     mixers = [], cautionaries = [lambda data,it: nonloc_sign_cautionary(data.Sigmakw['up'], desired_sign = -1, clip_off = False, real_or_imag = 'imag')], allowed_errors = [0],    
                     printout = lambda data, it: (data.dump_general( quantities = ['Sigmakw','Sigmaijw'], suffix='-current' ) if ((it+1) % print_current==0) else None)  )  ]
+
+    if use_cumulant:
+      del actions[3] 
+      actions.append( generic_action(  name = "cumulant",
+                          main = lambda data: cumul_nested_mains.cumulant(data), 
+                          mixers = [], cautionaries = [lambda data,it: nonloc_sign_cautionary(data.gkw['up'], desired_sign = -1, clip_off = False, real_or_imag = 'imag')], allowed_errors = [0],    
+                          printout = lambda data, it: (data.dump_general( quantities = ['gijw','gkw'], suffix='-current' ) if ((it+1) % print_current==0) else None)  ) 
+                    )
 
     monitors = [ monitor( monitored_quantity = lambda: dt.ns['up'], 
                           h5key = 'n_vs_it', 
@@ -193,6 +213,19 @@ def nested_calculation( clusters,
                             struct=fermionic_struct, 
                             archive_name= dt.archive_name,
                             h5key = 'diffs_G_loc' ) ]
+    max_dist = 3
+    for i in range(max_dist+1):
+      for j in range(0,i+1):
+        convergers.append( converger( monitored_quantity = lambda i=i, j=j: dt.Gijw['up'][:,i,j],
+                                      accuracy=accuracy,
+                                      func = converger.check_numpy_array,  
+                                      archive_name= dt.archive_name,
+                                      h5key = 'diffs_G_%s%s'%(i,j) ) )
+    convergers.append( converger( monitored_quantity = lambda: dt.G_imp_iw,
+                                  accuracy=accuracy, 
+                                  struct=impurity_struct, 
+                                  archive_name= dt.archive_name,
+                                  h5key = 'diffs_G_imp' ) )
 
     dmft = generic_loop(
                 name = "nested-cluster DMFT", 
@@ -215,16 +248,20 @@ def nested_calculation( clusters,
         if not fixed_n:  
           dt.mus['up'] = U/2.0 + mutilde
         else:
-  	  dt.mus['up'] = U/2.0
+          dt.mus['up'] = U/2.0
         if 'down' in dt.fermionic_struct.keys(): dt.mus['down'] = dt.mus['up']   #this is not necessary at the moment, but may become
-        #dt.Sigma_loc_iw << U/2.0 #this is not actually involved in anything, maybe remove it?
         for C in dt.impurity_struct.keys():
           for l in dt.impurity_struct[C]: #just the local components (but on each site!)         
             dt.Sigma_imp_iw[C].data[:,l,l] = U/2.0
-        for key in fermionic_struct.keys(): dt.Sigmakw[key][:,:,:] = U/2.0    
-        dt.dump_general( quantities = ['Sigmakw','Sigma_imp_iw'], suffix='-initial' )  
+        if not use_cumulant:
+          for key in fermionic_struct.keys(): dt.Sigmakw[key][:,:,:] = U/2.0    
+          dt.dump_general( quantities = ['Sigmakw','Sigma_imp_iw'], suffix='-initial' )  
+        else:
+          for key in fermionic_struct.keys(): numpy.transpose(dt.gkw[key])[:] = numpy.array(dt.iws[:])**(-1.0)    
+          dt.dump_general( quantities = ['gkw'], suffix='-initial' )  
 
     if (counter==0) and do_dmft_first:
+      assert False, "this part of code needs to be adjusted" 
       #do one short run of dmft before starting nested
       if mpi.is_master_node(): print "================= 20 iterations of DMFT!!!! ================="
       #save the old stuff
@@ -251,13 +288,13 @@ def nested_calculation( clusters,
       #put everything back the way it was
       dmft.name = old_name
       dt.impurity_struct = old_impurity_struct
-      prepare_nested( dt, nested_scheme )
+      prepare( dt, nested_scheme )
   
 
     #run nested!-------------
 
     if mix_Sigma:
-      actions[3].mixers.append(mixer( mixed_quantity = lambda: dt.Pqnu,
+      actions[3].mixers.append(mixer( mixed_quantity = lambda: (dt.Sigmakw if (not use_cumulant) else dt.gkw),
                                       rules=rules,
                                       func=mixer.mix_lattice_gf,
                                       initialize = True )) 
@@ -272,6 +309,11 @@ def nested_calculation( clusters,
               print_final=True, 
               print_current = 1 )
     if mpi.is_master_node():
+      if use_cumulant:
+        print "calculating Sigma"  
+        dt.get_Sigmakw() 
+        dt.get_Sigma_loc()
+        dt.dump_general(['Sigmakw','Sigma_loc_iw'],suffix='-final')
       cmd = 'mv %s %s'%(filename, filename.replace("result", "nested")) 
       print cmd
       os.system(cmd)
