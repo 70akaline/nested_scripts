@@ -1,9 +1,11 @@
 from data_containers import nested_data
 from data_containers import cumul_nested_data
+from data_containers import cellular_data
 from getters import *
 from impurity_solvers import solvers
 
-def prepare_nested( data, nested_scheme ):
+#----------------------------- nested -----------------------------------------------------------------------#
+def prepare_nested( data, nested_scheme, solver_class = solvers.ctint ):
   assert data.__class__ == nested_data, "wrong data type"
   assert data.fermionic_struct == {'up': [0]}, "wrong fermionic struct for this calcalation"
   assert data.impurity_struct == nested_scheme.get_impurity_struct(), "wrong impurity struct for this nested scheme" 
@@ -24,9 +26,10 @@ def prepare_nested( data, nested_scheme ):
 
   data.get_Gweiss = lambda: full_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw(data.Gweiss_iw,data.Gijw,data.Sigma_imp_iw, mapping = nested_scheme.get_imp_to_latt_mapping()) 
 
-  data.dump_solvers = lambda suffix: [solvers.ctint.dump( data.solvers[C], data.archive_name, suffix='-%s%s'%(C,suffix) ) for C in data.impurity_struct.keys()]
+  data.dump_solvers = lambda suffix: [solver_class.dump( data.solvers[C], data.archive_name, suffix='-%s%s'%(C,suffix) ) for C in data.impurity_struct.keys()]
 
-def prepare_cumul_nested( data, nested_scheme ):
+#----------------------------- cumul_nested -----------------------------------------------------------------------#
+def prepare_cumul_nested( data, nested_scheme, solver_class = solvers.ctint  ):
   assert data.__class__ == cumul_nested_data, "wrong data type"
   assert data.fermionic_struct == {'up': [0]}, "wrong fermionic struct for this calcalation"
   assert data.impurity_struct == nested_scheme.get_impurity_struct(), "wrong impurity struct for this nested scheme" 
@@ -47,4 +50,27 @@ def prepare_cumul_nested( data, nested_scheme ):
 
   data.get_Gweiss = lambda: full_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw(data.Gweiss_iw,data.Gijw,data.Sigma_imp_iw, mapping = nested_scheme.get_imp_to_latt_mapping()) 
 
-  data.dump_solvers = lambda suffix: [solvers.ctint.dump( data.solvers[C], data.archive_name, suffix='-%s%s'%(C,suffix) ) for C in data.impurity_struct.keys()]
+  data.dump_solvers = lambda suffix: [solver_class.dump( data.solvers[C], data.archive_name, suffix='-%s%s'%(C,suffix) ) for C in data.impurity_struct.keys()]
+
+#----------------------------- celullar -----------------------------------------------------------------------#
+
+def prepare_cellular( data, Lx, Ly, solver_class = solvers.ctint  ):
+  assert data.__class__ == cellular_data, "wrong data type"
+  assert data.fermionic_struct == {'up': [0]}, "wrong fermionic struct for this calcalation"
+  assert len(data.impurity_struct.keys()) == 1, "in celullar we solve only one cluster" 
+  #TODO get mapping for cluster 
+
+  data.get_Gijkw = lambda: full_fill_Gijkw(data.Gijkw, data.iws, data.mus, data.epsilonijk, data.Sigmaijkw)
+  data.get_G_ij_loc = lambda: full_fill_G_ij_iw(data.G_ij_iw, data.Gijkw)
+  data.get_Gijw = data.get_G_ij_loc #this is needed for the nested_mains.lattice
+  data.get_n_from_G_ij_loc = lambda: full_fill_ns_from_G_loc_iw(data.ns, data.G_ij_iw, fit_tail_starting_iw = 14.0, ntau = None)
+
+  data.get_n = lambda: [data.get_Gijkw(), data.get_G_ij_loc(), data.get_n_from_G_ij_loc()]
+
+  data.get_Gweiss = lambda: full_fill_Gweiss_iw(data.Gweiss_iw, data.G_ij_iw, data.Sigma_imp_iw)
+
+  data.dump_solvers = lambda suffix: [solver_class.dump( data.solvers[C], data.archive_name, suffix='-%s%s'%(C,suffix) ) for C in data.impurity_struct.keys()]
+
+  data.periodize_cumul = lambda: periodize_cumul(data.Gkw, data.Sigmakw, data.gkw, data.gijw, data.g_imp_iw, data.iws, data.mus, data.epsilonk, data.Sigma_imp_iw, Lx, Ly)
+  data.periodize_selfenergy = lambda: periodize_selfenergy(data.Gkw, data.Sigmakw, data.Sigmaijw, data.iws, data.mus, data.epsilonk, data.Sigma_imp_iw, Lx, Ly)
+

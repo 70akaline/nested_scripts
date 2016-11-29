@@ -4,6 +4,7 @@ from copy import deepcopy
 from operator import itemgetter
 import itertools
 from numpy import pi
+from pytriqs.archive import *
 
 ####################################################################################################################
 #---------------------------- symmetry operations to figure out equivalent links ----------------------------------#
@@ -349,8 +350,8 @@ class contribution():
         self.j = copy(j)
         self.Lx = copy(Lx)
         self.Ly = copy(Ly)
-        self.sites_contained = sorted(sites_contained, key=itemgetter(0,1))
-    
+        self.sites_contained = sorted(sites_contained, key=itemgetter(0,1))         
+   
     def name(self):
         if self.sites_contained==[]:
             return "%sx%s"%(self.Lx, self.Ly)
@@ -626,6 +627,43 @@ class nested_struct:
                 self.contribs["%s|%s"%(x,y)] = c
                 self.all_contribs.extend(c)                
         #print self.all_contribs
+
+    def print_to_file(self, archive_name):
+        A=HDFArchive(archive_name,"w")        
+        allctrbs = []
+        for c in self.all_contribs:
+          allctrbs.append(c.__dict__)
+        A['all_contribs'] = allctrbs
+        ctrbs = {}
+        for C in self.contribs.keys():
+           ctrbsC = []
+           for c in self.contribs[C]:
+             ctrbsC.append(c.__dict__)
+           ctrbs[C] = ctrbsC                            
+        A['contribs'] = ctrbs
+        A['maxLx'] = self.maxLx
+        del A
+
+    @classmethod  
+    def from_file(cls, archive_name):
+        ns = cls([])
+        A=HDFArchive(archive_name,"r")        
+        allctrbs = A['all_contribs']
+        ns.all_contribs = []
+        for cdict in allctrbs:
+          ns.all_contribs.append(contribution(**cdict))
+
+        ctrbs = A['contribs']
+        ns.contribs = {}
+        for C in ctrbs.keys():
+           ns.contribs[C] = []
+           for cdict in ctrbs[C]:
+             ns.contribs[C].append(contribution(**cdict))
+        ns.maxLx = A['maxLx']
+        del A
+        return ns
+
+
     
     def get_tex(self):
         lbl = ""
@@ -655,9 +693,9 @@ class nested_struct:
     
     def latt_to_imp_mapping(self, x,y):
         X,Y = abs(x),abs(y)
-        if Y>X: X,Y = Y,X
         if X>self.nk/2+1: X = self.nk - X
         if Y>self.nk/2+1: Y = self.nk - Y
+        if Y>X: X,Y = Y,X ## careful here with the order of commands!
         mps = []
         key = "%s|%s"%(X,Y)
         if key in self.contribs.keys(): 

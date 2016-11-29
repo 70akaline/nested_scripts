@@ -77,18 +77,25 @@ def extract_Sigma_from_F_and_G(Sigma_iw, F_iw, G_iw):
 def extract_Sigma_from_G0_and_G(Sigma_iw, G0_iw, G_iw):
   Sigma_iw << inverse(G0_iw) - inverse(G_iw)
 
-def fit_and_overwrite_tails_on_Sigma(Sigma_iw, starting_iw=14.0):
-  fixed_coeff = TailGf(1,1,1,-1)
-  fixed_coeff[-1] = array([[0.]])
+def fit_and_overwrite_tails_on_Sigma(Sigma_iw, starting_iw=14.0, no_hartree=False):
+  Nc = len(Sigma_iw.data[0,0,:])
+  if no_hartree:  
+    known_coeff = TailGf(Nc,Nc,2,-1)
+    known_coeff[-1] = zeros((Nc,Nc))#array([[0.]])
+    known_coeff[0] = zeros((Nc,Nc))#array([[0.]])
+  else:  
+    known_coeff = TailGf(Nc,Nc,1,-1)
+    known_coeff[-1] = zeros((Nc,Nc))#array([[0.]])
   nmax = Sigma_iw.mesh.last_index()
-  nmin = int(((starting_iw*Sigma_iw.beta)/math.pi-1.0)/2.0) #the matsubara index at iw_n = starting_iw
-  Sigma_iw.fit_tail(fixed_coeff, 5, nmin, nmax, True)
+  nmin = int(((starting_iw*Sigma_iw.beta)/math.pi-1.0)/2.0) 
+  Sigma_iw.fit_tail(known_coeff,5,nmin,nmax, True)
 
 def fit_and_overwrite_tails_on_G(G_iw, starting_iw=14.0):
-  fixed_coeff = TailGf(1,1,3,-1)
-  fixed_coeff[-1] = array([[0.]])
-  fixed_coeff[0] = array([[0.]])
-  fixed_coeff[1] = array([[1.]])
+  Nc = len(G_iw.data[0,0,:])
+  fixed_coeff = TailGf(Nc,Nc,3,-1)
+  fixed_coeff[-1] = zeros((Nc,Nc))
+  fixed_coeff[0] = zeros((Nc,Nc))
+  fixed_coeff[1] = identity(Nc)
   nmax = G_iw.mesh.last_index()
   nmin = int(((starting_iw*G_iw.beta)/math.pi-1.0)/2.0) #the matsubara index at iw_n = starting_iw
   G_iw.fit_tail(fixed_coeff, 5, nmin, nmax, True)

@@ -16,6 +16,8 @@ from numpy.linalg import inv
 
 from math import cos
 import cmath
+from cmath import exp
+
 
 ################################ general initializers ##########################################
 
@@ -81,23 +83,31 @@ def blockwise_get_G_loc_tau_from_G_loc_iw(G_loc_iw,
   if ntau is None:
     ntau = 3*len(G_loc_iw.data[:,0,0])
 
-  G_loc_tau = GfImTime(indices = [0], beta = G_loc_iw.beta, n_points = ntau, statistic = 'Fermion')
+  Nc = len(G_loc_iw.data[0,0,:])
+  G_loc_tau = GfImTime(indices = range(Nc), beta = G_loc_iw.beta, n_points = ntau, statistic = 'Fermion')
   G_loc_tau << InverseFourier(G_loc_iw)  
   return G_loc_tau
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------#
 def blockwise_get_n_from_G_loc_iw(G_loc_iw,
-                                  fit_tail_starting_iw = 14.0, ntau = None):  
+                                  fit_tail_starting_iw = 14.0, ntau = None,
+                                  site_index = 0):  
     Gw = G_loc_iw.copy()
     Gtau = blockwise_get_G_loc_tau_from_G_loc_iw(Gw, fit_tail_starting_iw, ntau)
-    return -Gtau.data[-1,0,0]
+    return -Gtau.data[-1,site_index,site_index]
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------#
 def full_fill_ns_from_G_loc_iw(ns, G_loc_iw,
                               fit_tail_starting_iw = 14.0, ntau = None):
+  if mpi.is_master_node(): print "full_fill_ns_from_G_loc_iw"
   for U in [name for name, g in G_loc_iw]:
     Gw = G_loc_iw.copy()
-    ns[U] = blockwise_get_n_from_G_loc_iw(G_loc_iw[U], fit_tail_starting_iw, ntau)
+    if U not in ns.keys():       
+      key = 'up' #careful with this!!!!
+    else:
+      key = U
+    ns[key] = blockwise_get_n_from_G_loc_iw(G_loc_iw[U], fit_tail_starting_iw, ntau)
+    #print "ns: ", ns  
 
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------#
@@ -225,3 +235,143 @@ def full_fill_Sigmakw_from_gkw(Sigmakw, ws, mu, gkw):
      Sigmakw[U][:,:,:] = invSigma
 
 
+#-----------------------------------------------------------------------------------------------------------------------------------------------#
+#                                        cellular specific
+#-----------------------------------------------------------------------------------------------------------------------------------------------#
+
+def blockwise_get_Gijkw(iws, mu, epsilonijk, Sigmaijkw):
+  if mpi.is_master_node(): print "blockwise_get_Gijkw"
+  Nc = len(epsilonijk[:,0,0,0])
+  nk = len(epsilonijk[0,0,:,0])
+  nw = len(iws)
+  
+  Gijkw = -Sigmaijkw
+  iom = numpy.zeros((Nc,Nc,nw), dtype=numpy.complex_)
+  for i in range(Nc): iom[i,i,:] = numpy.array(iws[:])+mu
+  numpy.transpose(Gijkw)[:,:,:] += iom[:,:,:]
+  Gijkw -= epsilonijk
+  for wi in range(nw):
+    for kxi in range(nk):
+      for kyi in range(nk):
+        Gijkw[wi,:,:,kxi,kyi] = inv(Gijkw[wi,:,:,kxi,kyi])
+  return Gijkw
+
+def full_fill_Gijkw(Gijkw, iws, mus, epsilonijk, Sigmaijkw):
+  for U in Gijkw.keys():
+    Gijkw[U][:,:,:,:,:] = blockwise_get_Gijkw(iws, mus[U], epsilonijk[U], Sigmaijkw[U])
+
+def full_fill_G_ij_iw(G_ij_iw, Gijkw):
+  if mpi.is_master_node(): print "full_fill_G_ij_iw"
+  nk = len(Gijkw['up'][0,0,0,0,:])
+  for name,g in G_ij_iw:
+    g.data[:,:,:] = numpy.sum(Gijkw['up'], axis=(3,4))/nk**2.0
+
+def full_fill_Gweiss_iw(Gweiss_iw, G_ij_iw, Sigma_imp_iw):
+  if mpi.is_master_node(): print "full_fill_Gweiss_iw"
+  for name,g in Gweiss_iw:
+    nw = len(g.data[:,0,0])
+    for wi in range(nw):
+      g.data[wi,:,:] = inv( inv(G_ij_iw[name].data[wi,:,:]) + Sigma_imp_iw[name].data[wi,:,:] )
+    fit_fermionic_gf_tail(g)
+
+def cellular_latt_to_imp_mapping(x,y,nk,Lx,Ly):  
+  X,Y = abs(x),abs(y)
+  if X>nk/2+1: X = nk - X
+  if Y>nk/2+1: Y = nk - Y
+  if Y>X: X,Y = Y,X
+  if (X>=Lx) or (Y>=Ly): return None   
+  i = 0
+  j = Lx*Y + X
+  return [i,j]
+
+def periodize_cumul(Gkw, Sigmakw, gkw, gijw, g_imp_iw, iws, mus, epsilonk, Sigma_imp_iw, Lx, Ly):
+  if mpi.is_master_node(): print "periodize_cumul"
+  full_fill_g_imp_iw_from_Sigma_imp_iw(g_imp_iw, mus['up'], Sigma_imp_iw)
+  imp_key = [name for name,g in g_imp_iw ][0] 
+  Nc = len(g_imp_iw[imp_key].data[0,0,:])
+  nk = len(epsilonk['up'][0,:])
+  for U in gijw.keys():
+    for x in range(nk):
+      for y in range(nk):
+        ij = cellular_latt_to_imp_mapping(x,y,nk,Lx,Ly)        
+        if ij is None:
+          gijw[U][:,x,y] = 0.0
+        else:
+          i = ij[0]
+          j = ij[1]
+          print "x,y,i,j: ", x,y,i,j
+          gijw[U][:,x,y] = g_imp_iw[imp_key].data[:,i,j]
+    gkw[U][:,:,:] = spatial_FT(gijw[U], N_cores=1)
+  full_fill_Sigmakw_from_gkw(Sigmakw, numpy.array(iws).imag, mus['up'], gkw)
+  full_fill_Gkw_from_epsiolonk_and_gkw(Gkw, epsilonk, gkw)
+
+def periodize_selfenergy(Gkw, Sigmakw, Sigmaijw, iws, mus, epsilonk, Sigma_imp_iw, Lx, Ly):  
+  if mpi.is_master_node(): print "periodize_selfenergy"
+  imp_key = [name for name,g in Sigma_imp_iw ][0] 
+  Nc = len(Sigma_imp_iw[imp_key].data[0,0,:])
+  nk = len(epsilonk['up'][0,:])
+  for U in Sigmaijw.keys():
+    for x in range(nk):
+      for y in range(nk):
+        ij = cellular_latt_to_imp_mapping(x,y,nk,Lx,Ly)
+        if ij is None:
+          Sigmaijw[U][:,x,y] = 0.0
+        else:
+          i = ij[0]
+          j = ij[1]
+          Sigmaijw[U][:,x,y] = Sigma_imp_iw[imp_key].data[:,i,j]
+    Sigmakw[U][:,:,:] = spatial_FT(Sigmaijw[U], N_cores=1)
+  full_fill_Gkw_from_iws_mus_epsiolonk_and_Sigmakw(Gkw, iws, mus, epsilonk, Sigmakw)
+
+def matrix_dispersion(Nc, t,tp, kx, ky):
+  if Nc==2:
+    #  ABAB
+    #  BABA 
+    #  ABAB
+    A =       [[0,t],
+               [t,0]]
+
+    tk = t*(exp(1j*kx)+2.0*cos(ky))
+
+    B =       [[0,             tk],
+               [numpy.conj(tk),0 ]]
+
+    tpk = tp*cos(kx)*cos(ky)
+
+    C =       [[tpk,0],
+               [0, tpk]]
+
+    return numpy.array(A) + numpy.array(B) + numpy.array(C)
+  elif Nc==4:
+    #  CDCDCD 
+    #  ABABAB
+    #  CDCDCD 
+    #  ABABAB
+    A =       [[0,  t,  t,  tp],
+               [t,  0,  tp, t ],
+               [t,  tp, 0,  t ],
+               [tp, t,  t,  0 ]]
+
+    tkx = t*exp(-1j*kx)
+    tky = t*exp(1j*kx)
+    ctkx = t*exp(1j*kx)
+    ctky = t*exp(-1j*kx)
+
+    B =       [[0,    tkx,  tky,  0  ],
+               [ctkx, 0,    0,    tky],
+               [ctky, 0,    0,    tkx],
+               [0,    ctky, ctkx, 0  ]]
+
+    tpkAD = tp*(  2.0*cos(kx+ky) + exp(-1j*(kx-ky))  )
+    tpkBC = tp*(  2.0*cos(kx-ky) + exp(+1j*(kx+ky))  )
+    tpkDA = numpy.conj(tpkAD)
+    tpkCB = numpy.conj(tpkBC)
+
+    C =       [[0,     0,     0,     tpkAD ],
+               [0,     0,     tpkBC, 0     ],
+               [0,     tpkCB, 0,     0     ],
+               [tpkDA, 0,     0,     0     ]]
+
+    return numpy.array(A) + numpy.array(B) + numpy.array(C)
+  else:
+    assert False, "not yet implemented"

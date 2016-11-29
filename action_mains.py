@@ -33,7 +33,8 @@ class nested_mains:
         dt.mus['up'] = mu
         if 'down' in dt.fermionic_struct.keys(): dt.mus['down'] = dt.mus['up']
         dt.get_n()        #print "funcvalue: ",-abs(n - dt.ns['up'])  
-
+        #print "dt.ns: ", dt.ns
+          
         val = 1.0-abs(n - dt.ns['up'])  
         if mpi.is_master_node(): print "amoeba func call: val = ",val
         if val != val: return -1e+6
@@ -91,13 +92,24 @@ class nested_mains:
       solver_struct = {'up': data.impurity_struct[C], 'dn': data.impurity_struct[C]}        
       for key in solver_struct.keys():
         data.solvers[C].G0_iw[key] << data.Gweiss_iw[C]
-        #don't forget to fit tail here
       data.solvers[C].Jperp_iw << 0.0
       data.solvers[C].D0_iw << 0.0
+
       if mpi.is_master_node(): print "nested_mains.impurity: launching impurity",C
       solvers.ctint.run(data, C, U, symmetrize_quantities, alpha, delta, n_cycles, max_times[C], solver_data_package)
-      
 
+  @staticmethod
+  def impurity_cthyb(data, U, symmetrize_quantities = True, n_cycles=20000, max_times = {'1x1': 5*60 }, solver_data_package = None, Cs = [] ):
+    data.Sigma_imp_iw << 0
+    for C in (data.impurity_struct.keys() if Cs==[] else Cs):
+      solver_struct = {'up': data.impurity_struct[C], 'dn': data.impurity_struct[C]}        
+      for key in solver_struct.keys():
+        data.solvers[C].G0_iw[key] << data.Gweiss_iw[C]
+
+      if mpi.is_master_node(): print "nested_mains.impurity_cthyb: launching impurity",C
+      solvers.cthyb.run(data, C, U, symmetrize_quantities, n_cycles, max_times[C], solver_data_package)
+      
+#--------------------------------------------- cumul_nested ----------------------------------#
 class cumul_nested_mains:
   @staticmethod 
   def cumulant(data, mapping = lambda C,x,y: [0,0,0]): #[i,j,coef]
@@ -108,4 +120,5 @@ class cumul_nested_mains:
   @staticmethod 
   def selfenergy(data, mapping = lambda C,x,y: [0,0,0]): #[i,j,coef]
     data.get_Sigmakw()
+
 

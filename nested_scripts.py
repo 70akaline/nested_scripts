@@ -15,6 +15,7 @@ from tail_fitters import *
 from impurity_solvers import *
 from impurity_solvers import solvers
 from calculations import *
+from cellular_calculation import *
 
 if mpi.is_master_node():
   print ">>>>>>>>>>>>>>>>>> Welcome to nested_scripts!!! <<<<<<<<<<<<<<<<"

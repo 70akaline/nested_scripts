@@ -24,8 +24,8 @@ import copy
 ####################################################################################
 #  This file deals with data containers. Data classes know about
 #       - numerical parameters
-#	- choice of containers
-#	- choice of discretization schemes
+#        - choice of containers
+#        - choice of discretization schemes
 #
 #  IBZ is about k discretization, use of symmetry and resampling
 #  mats_freq is about matsubara frequencies and resampling (changing the number of 
@@ -346,7 +346,7 @@ class local_data(basic_data):
 
   def promote(self,  impurity_struct):
     self.impurity_struct = impurity_struct
-    self.parameters.extend( ['n_k', 'impurity_struct'] )
+    self.parameters.extend( ['impurity_struct'] )
 
     gs = []
     for C in self.impurity_struct.keys(): 
@@ -439,7 +439,7 @@ class non_local_data(basic_data):
       self.Sigmaijw[U] = numpy.zeros((self.nw, self.n_k, self.n_k), dtype=numpy.complex_)
       self.Gijw[U] = numpy.zeros((self.nw, n_k, n_k), dtype=numpy.complex_)
 
-    self.parameters.extend(['ks'])
+    self.parameters.extend(['ks','n_k'])
     self.non_interacting_quantities.extend([ 'epsilonk', 'G0kw'] )
 
     new_fermionic = [ 'Gkw', 'Sigmakw', 'Gijw', 'Sigmaijw' ]
@@ -518,7 +518,7 @@ class cumul_nested_data(nested_data):
                      fermionic_struct = {'up': [0]},
                      archive_name="dmft.out.h5"):
     nested_data.__init__(self, n_iw, n_k, beta, impurity_struct, fermionic_struct, archive_name)
-    cumul_nested_data.promote()
+    cumul_nested_data.promote(self)
 
   def promote(self):
     self.gkw = {}
@@ -537,4 +537,104 @@ class cumul_nested_data(nested_data):
     self.local_quantities.append('g_imp_iw') 
 
 
+#-------------------------------cellular data for CDMFT---------------------#
+
+class cellular_data(cumul_nested_data):
+  def __init__(self, n_iw = 100, 
+                     n_k = 12, 
+                     beta = 10.0, 
+                     impurity_struct = {'1x2': [0,1]},
+                     fermionic_struct = {'up': [0]},
+                     archive_name="dmft.out.h5"):
+    assert len(impurity_struct.keys())==1, "in cellular dmft we only solve one impurity problem"
+    cumul_nested_data.__init__(self, n_iw, n_k, beta, impurity_struct, fermionic_struct, archive_name) 
+    cellular_data.promote(self)
+
+  def promote(self):
+    self.imp_key = self.impurity_struct.keys()[0]
+    self.Nc = len(self.impurity_struct[self.imp_key])
+
+    self.parameters.extend(['imp_key','Nc'])
+
+    self.epsilonijk = {}
+    self.G0ijkw = {}
+
+    self.non_interacting_quantities.extend([ 'epsilonijk', 'G0ijkw'] )
+
+    self.Sigmaijkw = {}
+    self.Gijkw = {}
+
+    new_fermionic = [ 'Gijkw', 'Sigmaijkw' ]
+    self.matrix_non_local_fermionic_gfs = new_fermionic 
+    self.matrix_non_local_quantities = new_fermionic 
+
+    #initialize arrays 
+    for U in self.fermionic_struct.keys():
+      if mpi.is_master_node(): print "constructing fermionic_non_local_gfs, block: ", U
+      self.G0ijkw[U] = numpy.zeros((self.nw, self.Nc, self.Nc, self.n_k, self.n_k), dtype=numpy.complex_)
+      self.epsilonijk[U] = numpy.zeros((self.Nc, self.Nc, self.n_k, self.n_k), dtype=numpy.complex_)
+      self.Sigmaijkw[U] = numpy.zeros((self.nw, self.Nc, self.Nc, self.n_k, self.n_k), dtype=numpy.complex_)
+      self.Gijkw[U] = numpy.zeros((self.nw, self.Nc, self.Nc, self.n_k, self.n_k), dtype=numpy.complex_)
+
+    gs = []
+    for C in self.impurity_struct.keys(): 
+      gs.append ( GfImFreq(indices = self.impurity_struct[C], beta = self.beta, n_points =self.n_iw, statistic = 'Fermion') )     
+
+    self.G_ij_iw = BlockGf(name_list = self.impurity_struct.keys(), block_list = gs, make_copies = True)
+    self.Sigma_ij_iw = BlockGf(name_list = self.impurity_struct.keys(), block_list = gs, make_copies = True)
+
+    self.impurity_fermionic_gfs.extend( [ 'G_ij_iw', 'Sigma_ij_iw' ] )
+
+  def dump_all(self, archive_name=None, suffix='', parameters_and_non_interacting_without_suffix = True):
+    basic_data.dump_all(self, archive_name, suffix, parameters_and_non_interacting_without_suffix)
+    basic_data.dump_general(self, self.matrix_non_local_quantities, archive_name, suffix)
+
+  def change_ks(self, ks_new):
+    n_k_new = len(ks_new)
+
+    cumul_nested_data.change_ks(self, ks_new) 
+
+    for U in self.fermionic_struct.keys():
+      for key in self.matrix_non_local_fermionic_gfs:
+        epsilonijk_new = numpy.zeros((self.Nc,self.Nc, n_k_new, n_k_new),dtype=numpy.complex_)
+        for i in range(self.Nc):
+          for j in range(self.Nc):            
+            IBZ.resample(self.epsilonijk[U][i,j,:,:], epsilonk_new[i,j,:,:], self.ks, ks_new)
+        self.epsilonk[U] = copy.deepcopy(epsilonk_new)
+        try:
+          g = numpy.zeros((npoints, self.Nc, self.Nc, n_k_new, n_k_new),dtype=numpy.complex_)
+          for wi in range(self.nw):
+            for i in range(self.Nc):
+              for j in range(self.Nc):            
+                IBZ.resample(vars(self)[key][U][wi,i,j,:,:], g[wi,i,j,:,:], self.ks, ks_new) 
+          vars(self)[key][U] = copy.deepcopy(g)
+        except:
+          if mpi.is_master_node(): print "WARNING: could not change ks for ",key,"[",U,"]"
+    self.ks = copy.deepcopy(ks_new)
+    self.n_k = n_k_new
+
+  def change_beta(self, beta_new, n_iw_new = None, finalize = True):
+    if mpi.is_master_node(): print ">>>>>>>> CHANGING BETA!!!!"
+    if n_iw_new is None: n_iw_new = self.n_iw
+    nw_new = n_iw_new*2
+
+    cumul_nested_data.change_beta(self, beta_new, n_iw_new, finalize = False) 
+
+    #---lattice stugff gfs
+    for key in self.matrix_non_local_fermionic_gfs:
+      for U in self.fermionic_struct.keys():  
+        g = numpy.zeros((nw_new, self.Nc, self.Nc, self.n_k, self.n_k),dtype=numpy.complex_)          
+        for i in range(self.Nc):
+          for j in range(self.Nc):
+            for kxi in range(self.n_k):
+              for kyi in range(self.n_k):
+                mats_freq.change_temperature(vars(self)[key][U][:,i,j,kxi,kyi], g[:,i,j,kxi,kyi], self.ws, ws_new)     
+        vars(self)[key][U] = copy.deepcopy(g)
+    if finalize: 
+      self.beta = beta_new
+      self.n_iw = n_iw_new
+      self.ntau = ntau_new
+      self.nw = nw_new
+      self.ws = copy.deepcopy(ws_new)
+      self.iws = [ 1j*w for w in self.ws ]
 
