@@ -288,7 +288,7 @@ class solvers:
 
       data.G_imp_iw[C] << Fourier(G_tau)
       fit_and_overwrite_tails_on_G(data.G_imp_iw[C],starting_iw=7.0)
-      G0 = Gweiss_iw[C].copy()
+      G0 = data.Gweiss_iw[C].copy()
       fit_and_overwrite_tails_on_G(G0,starting_iw=7.0)      
       for wi in range(data.nw):   
         data.Sigma_imp_iw[C].data[wi,:,:] = inv(G0.data[wi,:,:]) - inv(data.G_imp_iw[C].data[wi,:,:])

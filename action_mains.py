@@ -19,11 +19,8 @@ class nested_mains:
     if mpi.is_master_node(): print "GW_mains: lattice:  n: ",n,", ph_symmetry",ph_symmetry, "accepted mu_range: ",accepted_mu_range
 
     if (n is None) or ((n==0.5) and ph_symmetry):
-      if n==0.5: #otherwise - nothing to be done
-        if mpi.is_master_node(): print "no mu search to be performed!"
-        #data.mus['up'] = 0
-        #if 'down' in data.fermionic_struct.keys(): data.mus['down'] = data.mus['up']  
-        data.get_n()
+      if mpi.is_master_node(): print "no mu search to be performed! it is your duty to set the chemical potential to U/2. mu =",data.mus['up']
+      data.get_n()
     else:
       def func(var, data):
         mu = var[0]

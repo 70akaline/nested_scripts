@@ -270,7 +270,7 @@ def nested_calculation( clusters, nested_struct_archive_name = None,
         dt.epsilonk = old_epsilonk
       else:
         if not fixed_n:  
-          dt.mus['up'] = U/2.0 + mutilde
+          dt.mus['up'] = mutilde
         else:
           dt.mus['up'] = U/2.0
         if 'down' in dt.fermionic_struct.keys(): dt.mus['down'] = dt.mus['up']   #this is not necessary at the moment, but may become

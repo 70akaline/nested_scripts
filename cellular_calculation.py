@@ -168,9 +168,9 @@ def cellular_calculation( Lx=2, Ly=1,
       if mpi.is_master_node(): print "max times automatic: ",max_times        
 
     actions =[  generic_action(  name = "lattice",
-                    main = lambda data: nested_mains.lattice(data, n=n, ph_symmetry=ph_symmetry, accepted_mu_range=[-2.0,2.0]),
+                    main = lambda data: [ data.get_Sigmaijkw(), nested_mains.lattice(data, n=n, ph_symmetry=ph_symmetry, accepted_mu_range=[-2.0,2.0]) ],
                     mixers = [], cautionaries = [], allowed_errors = [],    
-                    printout = lambda data, it: ( [data.dump_general( quantities = ['Gijkw','G_ij_iw'], suffix='-current' ), data.dump_scalar(suffix='-current')
+                    printout = lambda data, it: ( [data.dump_general( quantities = ['Sigmaijkw','Gijkw','G_ij_iw'], suffix='-current' ), data.dump_scalar(suffix='-current')
                                                   ] if ((it+1) % print_current==0) else None 
                                                 )
                               ),

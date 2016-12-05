@@ -256,6 +256,13 @@ def blockwise_get_Gijkw(iws, mu, epsilonijk, Sigmaijkw):
         Gijkw[wi,:,:,kxi,kyi] = inv(Gijkw[wi,:,:,kxi,kyi])
   return Gijkw
 
+def full_fill_Sigmaijkw(Sigmaijkw, Sigma_imp_iw):
+    if mpi.is_master_node(): print "full_fill_Sigmaijkw"
+    assert len(Sigmaijkw.keys())==1, "must be only one block in Sigmaijkw"
+    impkeys = [name for name,g in Sigma_imp_iw]    
+    assert len(impkeys)==1, "must be only one block in Sigma_imp_iw"      
+    numpy.transpose(Sigmaijkw[Sigmaijkw.keys()[0]])[:,:,:] = numpy.transpose(Sigma_imp_iw[impkeys[0]].data)[:,:,:]
+
 def full_fill_Gijkw(Gijkw, iws, mus, epsilonijk, Sigmaijkw):
   for U in Gijkw.keys():
     Gijkw[U][:,:,:,:,:] = blockwise_get_Gijkw(iws, mus[U], epsilonijk[U], Sigmaijkw[U])

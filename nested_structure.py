@@ -473,6 +473,24 @@ def are_equivalent(A,B): #can be used also for contributions
     return    (a.Lx == b.Lx)\
            and(a.Ly == b.Ly)\
            and(a.sites_contained == b.sites_contained) 
+
+def contrib_to_cluster(C):
+    return cluster(0,0,C.Lx,C.Ly,C.sites_contained,C.prefactor)
+
+def contribs_to_clusters(contribs):       
+    return [cluster(0,0,C.Lx,C.Ly,C.sites_contained,C.prefactor) for C in contribs]   
+
+def get_coords_from_label(C,i):
+    if C.sites_contained==[]:
+        return [C.x + i % C.Lx, C.y + i / C.Lx]     
+    else:
+        return [ C.x + sites_contained[i][0], C.y + sites_contained[i][1] ]
+
+def get_rel_coords_from_label(C,i):
+    if C.sites_contained==[]:
+        return [i % C.Lx,  i / C.Lx]     
+    else:
+        return [ sites_contained[i][0], sites_contained[i][1] ]   
     
 def get_overlap(A,B):
     if A.sites_contained!=[] or B.sites_contained!=[]:
@@ -565,14 +583,9 @@ def get_all_overlaps(cluster_list, mask=None):
             #print "already_used after cleaning: ", cluster_list[j].already_used        
     return overlap_list
 
-def get_all_contributions(x1,y1, clusters):    
-    shifts = []
-    for cluster in clusters:
-      shifts.extend(get_all_shifts_and_rotations(x1,y1, cluster))
-    overlaps = get_all_overlaps(shifts)
-    #print overlaps
+def get_contributions_from_all_subclusters(x1, y1, shifts_and_overlaps):
     contributions = []
-    for A in shifts+overlaps:
+    for A in shifts_and_overlaps:
         #find the indices of sites within ordered cluster (Lx>=Ly), here we assume symmetry x <-> y
         i = copy(A.label_within_ordered(0,0))
         j = copy(A.label_within_ordered(x1,y1) )
@@ -607,12 +620,57 @@ def get_all_contributions(x1,y1, clusters):
             contributions.append(contribution(A.prefactor,i,j,B.Lx, B.Ly, B.sites_contained))       
     return get_unique_non_zero_contributions(contributions)      
 
+def get_all_contributions(x1,y1, clusters):    
+    shifts = []
+    for cluster in clusters:
+      shifts.extend(get_all_shifts_and_rotations(x1,y1, cluster))
+    overlaps = get_all_overlaps(shifts)
+    #print overlaps
+    return get_contributions_from_all_subclusters(x1, y1, shifts+overlaps)
+
+def is_contained_in_any(C, clusters):
+    for c in clusters:
+        if c.is_supercluster_to(C): return True
+    return False
+
+def smart_get_all_contributions(x1,y1, clusters):     
+    maxLx, maxLy = 0, 0
+    for C in clusters:
+        if C.Lx > maxLx: maxLx = C.Lx
+        if C.Ly > maxLy: maxLy = C.Ly
+    assert maxLx>=maxLy, "please order your clusters"        
+    #maxL = max(maxLx, maxLy)            
+    
+    shifts_per_LxLy = []
+    for Lx in reversed(range(1,maxLx+1)):
+        for Ly in reversed(range(1,Lx+1)):  
+            C = cluster(0,0,Lx,Ly)
+            if not is_contained_in_any(C, clusters): continue
+            all_shifts = get_all_shifts_and_rotations(x1,y1,C)
+            shifts_per_LxLy.append(all_shifts)            
+
+    NLxLys = len(shifts_per_LxLy)
+    for l in range(1,NLxLys):
+        for C in shifts_per_LxLy[l]:
+            total_prefactor = 0        
+            for lp in range(l):
+                for D in shifts_per_LxLy[lp]:
+                    if D.is_supercluster_to(C):
+                        total_prefactor+=D.prefactor        
+            C.prefactor = 1-total_prefactor
+
+    shifts_and_overlaps = []
+    for shifts in shifts_per_LxLy:
+        shifts_and_overlaps.extend(shifts)
+
+    return get_contributions_from_all_subclusters(x1,y1, shifts_and_overlaps)
+
 #############################################################################################################################
             
 #--------------------------------------------- nested_structure -------------------------------------------------------------#                
 
 class nested_struct:
-    def __init__(self,clusters):
+    def __init__(self,clusters, use_smart_algorithm = False):
         self.all_contribs = []
         self.contribs = {}
         maxLx = 0
@@ -622,7 +680,10 @@ class nested_struct:
         self.maxLx = maxLx
         for x in range(maxLx):
             for y in range(0,x+1):                
-                c = get_all_contributions(x,y,clusters)
+                if use_smart_algorithm:
+                  c = smart_get_all_contributions(x,y,clusters)
+                else:
+                  c = get_all_contributions(x,y,clusters)
                 #print "x,y:",c
                 self.contribs["%s|%s"%(x,y)] = c
                 self.all_contribs.extend(c)                
