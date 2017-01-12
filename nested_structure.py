@@ -162,6 +162,47 @@ def get_identical_pair_sets(Nx,Ny):
     #    print  identical_pair_sets[k]#[0] 
     return identical_pair_sets
 
+#---------------------------- get tex to present equivalent links for a solid cluster ----------------------------------#
+def get_tex_from_identical_pair_sets(Lx,Ly,ips):
+    #make a copy first
+    cips = deepcopy(ips)
+    #now clean the pairs which are connected by inversion ij=ji
+    for eg in ips:
+        for p in eg:
+            for pp in eg:
+                if pp == p: continue
+                if p[0]==pp[1] and p[1]==pp[0]:
+                    ips[ips.index(eg)][eg.index(pp)] = [-1,-1]
+    cips = [[p for p in eg if p != [-1,-1]] for eg in ips]  
+    #create the string
+    tex = "\\begin{eqnarray}\n"
+    tex+= "%s \\times %s: \\\\ \\nonumber\n"%(Lx,Ly)
+    tex+= "&& \\boxed{\n"
+    tex+= "\\begin{array}{"
+    for x in range(Lx): tex+="c"
+    tex+="}\n"    
+    for y in reversed(range(Ly)):
+        for x in range(Lx):
+            ind = y*Lx + x
+            tex+="%s"%ind
+            if x!=Lx-1: tex+=" & "
+            else: tex+=" \\\\\n"
+    tex+="\\end{array} \n"            
+    tex+="} \\\\ \\nonumber \n"            
+    for eg in cips:
+        tex+="&\{& "
+        counter = 0
+        for p in eg:
+            tex+="("+str(p[0])+","+str(p[1])+")"
+            if p!=eg[-1]: tex+=",\;"
+            counter +=1
+            if counter==10 and not (p==eg[-1]):
+                counter =0
+                tex+=" \\\\ \\nonumber && \n"                        
+        tex+="\;\;\;\} \\\\ \\nonumber \n"    
+    tex += "\\end{eqnarray}\n"  
+    return tex
+
 ####################################################################################################################
 
 #--------------------------------------------- clsuter -------------------------------------------------------------#
@@ -727,16 +768,60 @@ class nested_struct:
 
     
     def get_tex(self):
-        lbl = ""
-        print "self.maxLx: ", self.maxLx
+        #print "self.maxLx: ", self.maxLx
+        lbl = "\\begin{eqnarray} \\nonumber\n"        
+        lbl+= "&&" 
+        struct = self.get_impurity_struct()
+        counter = 0
+        for C in struct.keys():
+          for c in self.all_contribs:
+            if c.name() == C: break
+          Lx = c.Lx
+          Ly = c.Ly
+          sites_contained = c.sites_contained
+          lbl+="\\boxed{\n"
+          lbl+= "\\begin{array}{"
+          for x in range(Lx): lbl+="c"
+          lbl+="}\n"    
+          if sites_contained==[]: 
+            for y in reversed(range(Ly)):
+                for x in range(Lx):
+                    ind = y*Lx + x
+                    lbl+="%s"%ind
+                    if x!=Lx-1: lbl+=" & "
+                    else: lbl+=" \\\\\n"
+          else:
+            for y in reversed(range(Ly)):
+                for x in range(Lx):
+                    if [x,y] in sites_contained: 
+                      ind = sites_contained.index([x,y])                    
+                      lbl+="%s"%ind
+                    else:  
+                      lbl+="\\cdot"
+                    if x!=Lx-1: lbl+=" & "
+                    else: lbl+=" \\\\\n"
+          lbl+="\\end{array} \n } \n" 
+          counter += 1 
+          if counter==4 and C!=struct.keys()[-1]:
+            lbl+="\\\\ \\nonumber &&"     
+            counter=0
+          elif C!=struct.keys()[-1]: lbl+="\;\;\;"
+        lbl+="\\\\ \\nonumber" 
+
         for x in range(self.maxLx):
             for y in range(0,x+1):                
                 key = "%s|%s"%(x,y)
                 if key in self.contribs.keys(): 
                     lbl += "\Sigma^\mathrm{latt}_{\mathbf{r}=(%s,%s)} &=& "%(x,y)                
+                    counter = 0
                     for c in self.contribs[key]:                         
                         lbl += c.get_tex()
+                        counter+=1
+                        if counter==4 and c!=self.contribs[key][-1]: 
+                          counter=0
+                          lbl += "\\\\ \\nonumber &&\n"     
                     lbl += "\\\\ \\nonumber \n"    
+        lbl+= "\\end{eqnarray}\n"
         return lbl
     
     def set_nk(self,nk):

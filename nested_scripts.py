@@ -1,6 +1,7 @@
 import first_include
 from first_include import *
 from amoeba import *
+from nested_structure import *
 from nested_structure import nested_struct
 from nested_structure import cluster
 from nested_structure import contribution
