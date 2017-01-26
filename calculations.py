@@ -31,8 +31,8 @@ def nested_calculation( clusters, nested_struct_archive_name = None,
                         mix_Sigma = False, rules = [[0, 0.5], [6, 0.2], [12, 0.65]],                        
                         do_dmft_first = False, 
                         use_cthyb = False,
-                        alpha = 0.5, delta = 0.1,  
-                        n_cycles=100000, 
+                        alpha = 0.5, delta = 0.1,  automatic_alpha_and_delta = False,
+                        n_cycles=10000000, 
                         max_time_rules= [ [1, 5*60], [2, 20*60], [4, 80*60], [8, 200*60], [16,400*60] ], time_rules_automatic=False, exponent = 0.7, overall_prefactor=1.0, no_timing = False,
                         accuracy = 1e-4, 
                         solver_data_package = None,
@@ -186,6 +186,9 @@ def nested_calculation( clusters, nested_struct_archive_name = None,
         max_times[C] = int(overall_prefactor*pref*5*60)
       if mpi.is_master_node(): print "max times automatic: ",max_times        
 
+    identical_pairs_Sigma = nested_scheme.get_identical_pairs()
+    identical_pairs_G = nested_scheme.get_identical_pairs_for_G()
+ 
     actions =[  generic_action(  name = "lattice",
                     main = lambda data: nested_mains.lattice(data, n=n, ph_symmetry=ph_symmetry, accepted_mu_range=[-2.0,2.0]),
                     mixers = [], cautionaries = [], allowed_errors = [],    
@@ -198,11 +201,16 @@ def nested_calculation( clusters, nested_struct_archive_name = None,
                     mixers = [], cautionaries = [], allowed_errors = [],    
                     printout = lambda data, it: (data.dump_general( quantities = ['Gweiss_iw'], suffix='-current' ) if ((it+1) % print_current==0) else None)  ),
                 generic_action(  name = "impurity",
-                    main = (lambda data: nested_mains.impurity(data, U, symmetrize_quantities = True, alpha=alpha, delta=delta, n_cycles=n_cycles, max_times = max_times, solver_data_package = solver_data_package ))
+                    main = (lambda data: nested_mains.impurity(data, U, symmetrize_quantities = True, alpha=alpha, delta=delta, automatic_alpha_and_delta = automatic_alpha_and_delta, 
+                                                               n_cycles=n_cycles, max_times = max_times, solver_data_package = solver_data_package ))
                            if (not use_cthyb) else
                            (lambda data: nested_mains.impurity_cthyb(data, U, symmetrize_quantities = True, n_cycles=n_cycles, max_times = max_times, solver_data_package = solver_data_package )),
-                    mixers = [], cautionaries = [lambda data,it: local_nan_cautionary(data, data.impurity_struct, Qs = ['Sigma_imp_iw'], raise_exception = True),
-                                                 lambda data,it: symmetrize_cluster_impurity(data.Sigma_imp_iw, nested_scheme.get_identical_pairs())], allowed_errors = [1],    
+                    mixers = [], cautionaries = [lambda data,it: local_nan_cautionary(data, data.impurity_struct, Qs = ['Sigma_imp_iw'], raise_exception = True),                                                 
+                                                 lambda data,it: ( symmetric_G_and_self_energy_on_impurity(data.G_imp_iw, data.Sigma_imp_iw, data.solvers, 
+                                                                                                          identical_pairs_Sigma, identical_pairs_G)
+                                                                   if it>=0 else  
+                                                                   symmetrize_cluster_impurity(data.Sigma_imp_iw, nested_scheme.get_identical_pairs()) )
+                                                ], allowed_errors = [1],    
                     printout = lambda data, it: ( [ data.dump_general( quantities = ['Sigma_imp_iw','G_imp_iw'], suffix='-current' ),
                                                     data.dump_solvers(suffix='-current')
                                                   ] if ((it+1) % print_current==0) else None)  ),
@@ -279,10 +287,13 @@ def nested_calculation( clusters, nested_struct_archive_name = None,
             dt.Sigma_imp_iw[C].data[:,l,l] = U/2.0
         if not use_cumulant:
           for key in fermionic_struct.keys(): dt.Sigmakw[key][:,:,:] = U/2.0    
-          dt.dump_general( quantities = ['Sigmakw','Sigma_imp_iw'], suffix='-initial' )  
         else:
           for key in fermionic_struct.keys(): numpy.transpose(dt.gkw[key])[:] = numpy.array(dt.iws[:])**(-1.0)    
-          dt.dump_general( quantities = ['gkw'], suffix='-initial' )  
+      if not use_cumulant:
+        dt.dump_general( quantities = ['Sigmakw','Sigma_imp_iw'], suffix='-initial' )  
+      else:
+        dt.dump_general( quantities = ['gkw'], suffix='-initial' )  
+
 
     if (counter==0) and do_dmft_first:
       assert False, "this part of code needs to be adjusted" 

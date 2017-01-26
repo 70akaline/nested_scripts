@@ -1,4 +1,5 @@
 import numpy
+from numpy.linalg import inv
 
 from pytriqs.operators import *
 from pytriqs.archive import *
@@ -6,7 +7,9 @@ from pytriqs.gf.local import *
 from pytriqs.arrays import BlockMatrix, BlockMatrixComplex
 import pytriqs.utility.mpi as mpi
 
+
 from copy import deepcopy
+from tail_fitters import symmetrize_blockgf
 
 def nonloc_sign_cautionary(Q, clip_value = 0.0, desired_sign = -1, clip_off = False, real_or_imag = 'imag'):
       clip_off = clip_off and not (real_or_imag=='imag')
@@ -56,6 +59,53 @@ def symmetrize_cluster_impurity(Sigma_imp_iw, identical_pairs):
             print "symmetrize_cluster_impurity: WARNING!! Sigma_imp_iw[%s][:,%s,%s] far from average"%(C,i,j)
         Sigma_imp_iw[C].data[:,i,j] = total[:]
   return err
+
+
+def symmetric_G_and_self_energy_on_impurity(G_imp_iw, Sigma_imp_iw, solvers, identical_pairs_Sigma, identical_pairs_G):
+  M_imp_dict = {}
+  blocks = [name for name, g in solvers[solvers.keys()[0]].G0_iw]
+  for b in blocks:
+    M_imp_dict[b] = deepcopy(Sigma_imp_iw)
+
+  for C in solvers.keys():  
+    for b in blocks:
+      M_imp_dict[b][C] << solvers[C].M_iw[b]
+  for b in blocks:  
+    symmetrize_cluster_impurity(M_imp_dict[b], identical_pairs_Sigma)
+
+  G_imp_dict = deepcopy(M_imp_dict)
+  for C in solvers.keys():
+    for b in blocks:  
+      G_imp_dict[b][C] << solvers[C].G0_shift_iw[b] + solvers[C].G0_shift_iw[b]*M_imp_dict[b][C]*solvers[C].G0_shift_iw[b]
+  for b in blocks:  
+    symmetrize_cluster_impurity(G_imp_dict[b], identical_pairs_G)
+
+  shift = {}      
+  for C in solvers.keys():
+    shift[C] = {} 
+    for b in blocks:
+      nw = len(solvers[C].G0_shift_iw[b].data[:,0,0])
+      shift[C][b] = inv(solvers[C].G0_shift_iw[b].data[nw/2+10,:,:]) - inv(solvers[C].G0_iw[b].data[nw/2+10,:,:]) 
+
+    G_imp = deepcopy(solvers[C].G_iw)
+    for b in blocks:
+      G_imp[b] << G_imp_dict[b][C]
+    symmetrize_blockgf(G_imp) 
+    G_imp_iw[C] << G_imp[blocks[0]]
+
+  Sigma_imp_dict = deepcopy(M_imp_dict)
+  for C in solvers.keys():
+    for b in blocks:
+      Sigma_imp_dict[b][C] << M_imp_dict[b][C]*solvers[C].G0_shift_iw[b]*inverse(G_imp_iw[C]) - shift[C][b]
+    symmetrize_cluster_impurity(Sigma_imp_dict[b], identical_pairs_Sigma)
+    Sigma_imp = deepcopy(solvers[C].Sigma_iw)
+    for b in blocks:
+      Sigma_imp[b] << Sigma_imp_dict[b][C]
+    symmetrize_blockgf(Sigma_imp) 
+    Sigma_imp_iw[C] << Sigma_imp[blocks[0]]
+
+  return False
+  
 
 
 

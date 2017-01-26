@@ -136,7 +136,7 @@ class generic_loop:
         print_timings("iteration", times) 
         print footer_lbl
    
-      if converged and it>=mit_its:
+      if converged and it>=min_its:
         if mpi.is_master_node(): print "=-=-=-=-=-=-=-=-=-=-=-=-", self.name, " converged!!"
         break 
       if err and (it>max_it_err_is_allowed):

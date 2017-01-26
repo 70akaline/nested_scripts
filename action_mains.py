@@ -82,8 +82,30 @@ class nested_mains:
   def pre_impurity(data):
     data.get_Gweiss()    
 
+  @classmethod
+  def optimize_alpha_and_delta(cls, data, C, U, max_time, solver_data_package):
+    if mpi.is_master_node(): print "nested_mains.optimize_alpha_and_delta"
+    alphas = [0.5]#[0.3,0.4,0.45,0.48, 0.5, 0.52, 0.55,0.6,0.7]
+    deltas = [0.02, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8]
+    signs = numpy.zeros((len(alphas),len(deltas))) 
+    breaker = False     
+    for alpha in alphas:
+      for delta in deltas:
+        if mpi.is_master_node(): print "trying: alpha: %s delta: %s"%(alpha,delta)
+        signs[alphas.index(alpha),deltas.index(delta)] = sign = solvers.ctint.run(data, C, U, symmetrize_quantities=False, 
+                                                                           alpha=alpha, delta=delta, n_cycles=1000000, max_time=max_time, 
+                                                                           solver_data_package=solver_data_package, only_sign = True)
+        if mpi.is_master_node(): print "%s >>>> (alpha: %s, delta: %s): sign=%s"%(C,alpha,delta,sign) 
+        if sign>0.8:
+          breaker = True
+          break
+      if breaker: break
+    ai, di = numpy.unravel_index(numpy.argmax(signs), (len(alphas),len(deltas)))
+    max_sign = numpy.amax(signs) 
+    return alphas[ai], deltas[di], max_sign 
+
   @staticmethod
-  def impurity(data, U, symmetrize_quantities = True, alpha=0.5, delta=0.1, n_cycles=20000, max_times = {'1x1': 5*60 }, solver_data_package = None, Cs = [] ):
+  def impurity(data, U, symmetrize_quantities = True, alpha=0.5, delta=0.1, automatic_alpha_and_delta = False, n_cycles=20000, max_times = {'1x1': 5*60 }, solver_data_package = None, Cs = [] ):
     data.Sigma_imp_iw << 0
     for C in (data.impurity_struct.keys() if Cs==[] else Cs):
       solver_struct = {'up': data.impurity_struct[C], 'dn': data.impurity_struct[C]}        
@@ -91,7 +113,12 @@ class nested_mains:
         data.solvers[C].G0_iw[key] << data.Gweiss_iw[C]
       data.solvers[C].Jperp_iw << 0.0
       data.solvers[C].D0_iw << 0.0
-
+      if automatic_alpha_and_delta:
+        if mpi.is_master_node(): print "about to optimize alpha and delta for impurity",C
+        shorttime = min(600, max(30,int(max_times[C]/100)))
+        if mpi.is_master_node(): print "time per alpha,delta", shorttime
+        alpha, delta, max_sign = nested_mains.optimize_alpha_and_delta(data, C, U, shorttime, solver_data_package) 
+        if mpi.is_master_node(): print "%s >>>> best (alpha=%s,delta=%s): max_sign=%s"%(C,alpha,delta,max_sign)
       if mpi.is_master_node(): print "nested_mains.impurity: launching impurity",C
       solvers.ctint.run(data, C, U, symmetrize_quantities, alpha, delta, n_cycles, max_times[C], solver_data_package)
 

@@ -77,7 +77,7 @@ class solvers:
         data.solvers[C] = Solver( **solver_data_package['constructor_parameters'] )
 
     @staticmethod
-    def run(data, C, U, symmetrize_quantities=True, alpha=0.5, delta=0.1, n_cycles=20000, max_time = 5*60, solver_data_package = None ):
+    def run(data, C, U, symmetrize_quantities=True, alpha=0.5, delta=0.1, n_cycles=20000, max_time = 5*60, solver_data_package = None, only_sign = False ):
       solver = data.solvers[C]
 
       block_names = [name for name,g in solver.G0_iw]
@@ -88,8 +88,7 @@ class solvers:
       for i in range(1,N_states):
         h_int += U * n(block_names[0],i)*n(block_names[1],i)
 
-      N_s = 2
-      delta = 0.1
+      N_s = 2      
       ALPHA = [ [ [ alpha + delta*(-1)**(s+sig) for s in range(N_s)] for i in range(N_states)] for sig in range(2) ]
 
       if solver_data_package is None:  solver_data_package = {}    
@@ -100,8 +99,9 @@ class solvers:
       solver_data_package['solve_parameters']['alpha'] = ALPHA
       solver_data_package['solve_parameters']['n_cycles'] = n_cycles
       solver_data_package['solve_parameters']['max_time'] = max_time
-      solver_data_package['solve_parameters']['length_cycle'] = 100
-      solver_data_package['solve_parameters']['n_warmup_cycles'] = 1000
+      solver_data_package['solve_parameters']['length_cycle'] = 200
+      solver_data_package['solve_parameters']['n_warmup_cycles'] = 20000
+      solver_data_package['solve_parameters']['only_sign'] = only_sign
       solver_data_package['solve_parameters']['measure_nn'] = True
       solver_data_package['solve_parameters']['measure_nnt'] = False
       solver_data_package['solve_parameters']['measure_chipmt'] = False
@@ -131,14 +131,17 @@ class solvers:
       del dct['U']
       solver.solve(h_int = h_int, **dct )
 
-      G_iw = deepcopy(solver.G_iw)
-      Sigma_iw = deepcopy(solver.Sigma_iw)
-      if symmetrize_quantities:
-        symmetrize_blockgf(G_iw)
-        symmetrize_blockgf(Sigma_iw)
+      if not only_sign:
+        G_iw = deepcopy(solver.G_iw)
+        Sigma_iw = deepcopy(solver.Sigma_iw)
+        if symmetrize_quantities:
+          symmetrize_blockgf(G_iw)
+          symmetrize_blockgf(Sigma_iw)
 
-      data.G_imp_iw[C] << G_iw['up']   
-      data.Sigma_imp_iw[C] << Sigma_iw['up']
+        data.G_imp_iw[C] << G_iw['up']   
+        data.Sigma_imp_iw[C] << Sigma_iw['up']
+      else:
+        return solver.average_sign
 
     @staticmethod
     def slave_run(solver_data_package, printout=True):
