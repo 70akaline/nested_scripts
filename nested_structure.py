@@ -881,7 +881,7 @@ class nested_struct:
             identical_pairs[c.name()] = ipss
         return identical_pairs
 
-    def get_identical_pairs_for_G(self):
+    def get_identical_pairs_for_G(self, across_imps = False):
         impurity_struct = self.get_impurity_struct()
         ipfg = {}
         for C in impurity_struct:
@@ -895,7 +895,19 @@ class nested_struct:
                     if rx<ry: rx,ry = ry,rx
                     if not ( "%s|%s"%(rx,ry) in ipfg[C].keys()): ipfg[C]["%s|%s"%(rx,ry)] = []
                     ipfg[C]["%s|%s"%(rx,ry)].append([i,j])
-            ipfg[C] = ipfg[C].values()
-        return ipfg  
+        if not across_imps:  
+            for C in impurity_struct:
+                ipfg[C] = ipfg[C].values()
+            return ipfg
+        else:
+            ipfgai = {}
+            for C in impurity_struct:
+                for rxrykey in ipfg[C].keys():
+                    if not(rxrykey in ipfgai.keys()): ipfgai[rxrykey] = []  
+                    ips =  deepcopy(ipfg[C][rxrykey])
+                    for ip in ips: ip.insert(0,C)
+                    ipfgai[rxrykey].extend(ips)
+            return ipfgai
+  
 
            

@@ -188,11 +188,12 @@ def nested_calculation( clusters, nested_struct_archive_name = None,
 
     identical_pairs_Sigma = nested_scheme.get_identical_pairs()
     identical_pairs_G = nested_scheme.get_identical_pairs_for_G()
+    identical_pairs_G_ai = nested_scheme.get_identical_pairs_for_G(across_imps=True)
  
     actions =[  generic_action(  name = "lattice",
                     main = lambda data: nested_mains.lattice(data, n=n, ph_symmetry=ph_symmetry, accepted_mu_range=[-2.0,2.0]),
                     mixers = [], cautionaries = [], allowed_errors = [],    
-                    printout = lambda data, it: ( [data.dump_general( quantities = ['Gkw'], suffix='-current' ), data.dump_scalar(suffix='-current')
+                    printout = lambda data, it: ( [data.dump_general( quantities = ['Gkw','Gijw'], suffix='-current' ), data.dump_scalar(suffix='-current')
                                                   ] if ((it+1) % print_current==0) else None 
                                                 )
                               ),
@@ -207,9 +208,10 @@ def nested_calculation( clusters, nested_struct_archive_name = None,
                            (lambda data: nested_mains.impurity_cthyb(data, U, symmetrize_quantities = True, n_cycles=n_cycles, max_times = max_times, solver_data_package = solver_data_package )),
                     mixers = [], cautionaries = [lambda data,it: local_nan_cautionary(data, data.impurity_struct, Qs = ['Sigma_imp_iw'], raise_exception = True),                                                 
                                                  lambda data,it: ( symmetric_G_and_self_energy_on_impurity(data.G_imp_iw, data.Sigma_imp_iw, data.solvers, 
-                                                                                                          identical_pairs_Sigma, identical_pairs_G)
-                                                                   if it>=0 else  
-                                                                   symmetrize_cluster_impurity(data.Sigma_imp_iw, nested_scheme.get_identical_pairs()) )
+                                                                                                           identical_pairs_Sigma, identical_pairs_G,
+                                                                                                           across_imps=True, identical_pairs_G_ai=identical_pairs_G_ai  )
+                                                                   if it>=3 else  
+                                                                   symmetrize_cluster_impurity(data.Sigma_imp_iw, identical_pairs_Sigma) )
                                                 ], allowed_errors = [1],    
                     printout = lambda data, it: ( [ data.dump_general( quantities = ['Sigma_imp_iw','G_imp_iw'], suffix='-current' ),
                                                     data.dump_solvers(suffix='-current')
@@ -233,6 +235,18 @@ def nested_calculation( clusters, nested_struct_archive_name = None,
                  monitor( monitored_quantity = lambda: dt.mus['up'], 
                           h5key = 'mu_vs_it', 
                           archive_name = dt.archive_name),
+                 monitor( monitored_quantity = lambda: dt.Sigma_loc_iw['up'].data[dt.nw/2,0,0].imag, 
+                          h5key = 'ImSigma_loc_iw0_vs_it', 
+                          archive_name = dt.archive_name),
+                 monitor( monitored_quantity = lambda: dt.Sigma_loc_iw['up'].data[dt.nw/2,0,0].real, 
+                          h5key = 'ReSigma_loc_iw0_vs_it', 
+                          archive_name = dt.archive_name),
+                 monitor( monitored_quantity = lambda: dt.Sigmakw['up'].data[dt.nw/2,dt.n_k/2,dt.n_k/2].imag, 
+                          h5key = 'ImSigmakw_pipi_vs_it', 
+                          archive_name = dt.archive_name),
+                 monitor( monitored_quantity = lambda: dt.Sigmakw['up'].data[dt.nw/2,dt.n_k/2,dt.n_k/2].real, 
+                          h5key = 'ReSigmakw_pipi_vs_it', 
+                          archive_name = dt.archive_name),
                  monitor( monitored_quantity = lambda: dt.err, 
                           h5key = 'err_vs_it', 
                           archive_name = dt.archive_name) ]#,
@@ -244,7 +258,12 @@ def nested_calculation( clusters, nested_struct_archive_name = None,
                             accuracy=accuracy, 
                             struct=fermionic_struct, 
                             archive_name= dt.archive_name,
-                            h5key = 'diffs_G_loc' ) ]
+                            h5key = 'diffs_G_loc' ),
+                   converger( monitored_quantity = lambda: dt.Sigma_loc_iw,
+                            accuracy=accuracy, 
+                            struct=fermionic_struct, 
+                            archive_name= dt.archive_name,
+                            h5key = 'diffs_Sigma_loc') ]
     max_dist = 3
     for i in range(max_dist+1):
       for j in range(0,i+1):

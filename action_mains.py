@@ -9,7 +9,7 @@ from impurity_solvers import solvers
 
 class nested_mains:
   @staticmethod 
-  def selfenergy(data, mapping = lambda C,x,y: [0,0,0]): #[i,j,coef]
+  def selfenergy(data,):
     data.get_Sigmaijw()
     data.get_Sigmakw() 
     data.get_Sigma_loc()  
@@ -19,7 +19,7 @@ class nested_mains:
     if mpi.is_master_node(): print "GW_mains: lattice:  n: ",n,", ph_symmetry",ph_symmetry, "accepted mu_range: ",accepted_mu_range
 
     if (n is None) or ((n==0.5) and ph_symmetry):
-      if mpi.is_master_node(): print "no mu search to be performed! it is your duty to set the chemical potential to U/2. mu =",data.mus['up']
+      if mpi.is_master_node(): print "no mu search to be performed! it is your duty to set the chemical potential to U/2. mu =",data.get_mu()
       data.get_n()
     else:
       def func(var, data):
@@ -27,19 +27,20 @@ class nested_mains:
         dt = data[0]
         #print "func call! mu: ", mu, " n: ",dt.ns['up']
         n= data[1] 
-        dt.mus['up'] = mu
-        if 'down' in dt.fermionic_struct.keys(): dt.mus['down'] = dt.mus['up']
-        dt.get_n()        #print "funcvalue: ",-abs(n - dt.ns['up'])  
+        #dt.mus['up'] = mu
+        #if 'down' in dt.fermionic_struct.keys(): dt.mus['down'] = dt.mus['up']
+        dt.set_mu(mu)
+        dtn = dt.get_n()        #print "funcvalue: ",-abs(n - dt.ns['up'])  
         #print "dt.ns: ", dt.ns
           
-        val = 1.0-abs(n - dt.ns['up'])  
+        val = 1.0-abs(n - dtn)  
         if mpi.is_master_node(): print "amoeba func call: val = ",val
         if val != val: return -1e+6
         else: return val
 
       if mpi.is_master_node(): print "about to do mu search:"
 
-      guesses = [data.mus['up'], 0.0, -0.1, -0.3, -0.4, -0.5, -0.7, 0.3, 0.5, 0.7]
+      guesses = [data.get_mu(), 0.0, -0.1, -0.3, -0.4, -0.5, -0.7, 0.3, 0.5, 0.7]
       found = False  
       for l in range(len(guesses)):
         varbest, funcvalue, iterations = amoeba(var=[guesses[l]],
@@ -66,8 +67,9 @@ class nested_mains:
               print "mu: ",mu_grid[i], " 1-abs(n-n): ", func_values[i]
           mui_max = numpy.argmax(func_values)
           if mpi.is_master_node(): print "using mu: ", mu_grid[mui_max]
-          data.mus['up'] = mu_grid[mui_max]
-          if 'down' in data.fermionic_struct.keys(): data.mus['down'] = data.mus['up']
+          #data.mus['up'] = mu_grid[mui_max]
+          #if 'down' in data.fermionic_struct.keys(): data.mus['down'] = data.mus['up']
+          data.set_mu(mu_grid[mui_max])  
           data.get_n()
              
       if mpi.is_master_node() and found:
@@ -86,7 +88,7 @@ class nested_mains:
   def optimize_alpha_and_delta(cls, data, C, U, max_time, solver_data_package):
     if mpi.is_master_node(): print "nested_mains.optimize_alpha_and_delta"
     alphas = [0.5]#[0.3,0.4,0.45,0.48, 0.5, 0.52, 0.55,0.6,0.7]
-    deltas = [0.02, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8]
+    deltas = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
     signs = numpy.zeros((len(alphas),len(deltas))) 
     breaker = False     
     for alpha in alphas:
@@ -106,6 +108,7 @@ class nested_mains:
 
   @staticmethod
   def impurity(data, U, symmetrize_quantities = True, alpha=0.5, delta=0.1, automatic_alpha_and_delta = False, n_cycles=20000, max_times = {'1x1': 5*60 }, solver_data_package = None, Cs = [] ):
+    if mpi.is_master_node(): print "nested_mains.impurity. max_times",max_times
     data.Sigma_imp_iw << 0
     for C in (data.impurity_struct.keys() if Cs==[] else Cs):
       solver_struct = {'up': data.impurity_struct[C], 'dn': data.impurity_struct[C]}        
@@ -136,13 +139,19 @@ class nested_mains:
 #--------------------------------------------- cumul_nested ----------------------------------#
 class cumul_nested_mains:
   @staticmethod 
-  def cumulant(data, mapping = lambda C,x,y: [0,0,0]): #[i,j,coef]
+  def cumulant(data): #[i,j,coef]
     data.get_g_imp()
     data.get_gijw()
     data.get_gkw()
 
   @staticmethod 
-  def selfenergy(data, mapping = lambda C,x,y: [0,0,0]): #[i,j,coef]
+  def selfenergy(data,): #[i,j,coef]
     data.get_Sigmakw()
 
+#--------------------------------------------- cumul_nested ----------------------------------#
+class dca_mains:
+  @staticmethod 
+  def selfenergy(data):
+    data.get_SigmaR()
+    data.get_SigmaK()  
 

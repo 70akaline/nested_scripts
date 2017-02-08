@@ -334,7 +334,7 @@ class basic_data:
     #  for key in all_quantities:
     #    vars(self)[key] = copy.deepcopy( mpi.bcast(vars(self)[key]) ) 
 
-#------------------------ fermionic data --------------------------------#
+#------------------------ local data --------------------------------#
 class local_data(basic_data):
   def __init__(self, n_iw = 100, 
                      beta = 10.0, 
@@ -408,7 +408,7 @@ class local_data(basic_data):
       self.ntau = ntau_new
 
 
-#-------------------------------k data (for EDMFT+GW)---------------------#
+#-------------------------------k data ---------------------#
 class non_local_data(basic_data):
   def __init__(self, n_iw = 100, 
                      n_k = 12, 
@@ -494,7 +494,7 @@ class non_local_data(basic_data):
       self.ntau = ntau_new
 
 
-#-------------------------------k data (for EDMFT+GW)---------------------#
+#-------------------------------nested data ------------------------------#
 class nested_data(local_data,non_local_data):
   def __init__(self, n_iw = 100, 
                      n_k = 12, 
@@ -509,6 +509,8 @@ class nested_data(local_data,non_local_data):
   def change_beta(self, beta_new, n_iw_new = None, finalize = True):
     local_data.change_beta(self, beta_new, n_iw_new, finalize = False)
     non_local_data.change_beta(self, beta_new, n_iw_new, finalize = True)
+
+#------------------------------------ cumul nested -------------------------#
 
 class cumul_nested_data(nested_data):
   def __init__(self, n_iw = 100, 
@@ -637,4 +639,35 @@ class cellular_data(cumul_nested_data):
       self.nw = nw_new
       self.ws = copy.deepcopy(ws_new)
       self.iws = [ 1j*w for w in self.ws ]
+
+#================================ DCA ===========================================================#
+class dca_data(local_data):
+  def __init__(self, n_iw = 100,                     
+                     beta = 10.0, 
+                     impurity_struct = {'up': range(4)},
+                     fermionic_struct = {'0': [0],'1': [0],'2': [0],'3': [0]},
+                     archive_name="dmft.out.h5"):
+    basic_data.__init__(self, n_iw, beta, fermionic_struct, archive_name)
+    local_data.promote(self, impurity_struct)
+    self.promote()
+
+  def promote(self):
+    self.GweissK_iw = copy.deepcopy(self.G_loc_iw)
+    self.GweissR_iw = copy.deepcopy(self.G_loc_iw)
+    self.GK_iw = copy.deepcopy(self.G_loc_iw)
+    self.GR_iw = copy.deepcopy(self.G_loc_iw)
+    self.SigmaK_iw = copy.deepcopy(self.G_loc_iw)
+    self.SigmaR_iw = copy.deepcopy(self.G_loc_iw)
+    del self.G_loc_iw
+
+    new_local = ['GweissK_iw','GweissR_iw','GK_iw','GR_iw','SigmaK_iw','SigmaR_iw']
+
+    self.local_fermionic_gfs.remove('G_loc_iw')
+    self.local_fermionic_gfs.extend(new_local)
+    self.local_quantities.remove('G_loc_iw')
+    self.local_quantities.extend(new_local) 
+
+
+    
+
 

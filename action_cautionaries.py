@@ -37,7 +37,7 @@ def local_nan_cautionary(data, struct, Qs = [], raise_exception = True):
       if nan_found and raise_exception:  
         raise Exception('No nans please')
 
-def symmetrize_cluster_impurity(Sigma_imp_iw, identical_pairs):
+def symmetrize_cluster_impurity(Sigma_imp_iw, identical_pairs, name="quantity"):
   err = False
   for C in identical_pairs.keys():     
     for ips in identical_pairs[C]:
@@ -56,12 +56,37 @@ def symmetrize_cluster_impurity(Sigma_imp_iw, identical_pairs):
         if numpy.any(numpy.greater(numpy.abs(Sigma_imp_iw[C].data[:,i,j]-total[:]), 5e-3)):
           err = True  
           if mpi.is_master_node():
-            print "symmetrize_cluster_impurity: WARNING!! Sigma_imp_iw[%s][:,%s,%s] far from average"%(C,i,j)
+            print "symmetrize_cluster_impurity: WARNING!! %s[%s][:,%s,%s] far from average"%(name,C,i,j)
         Sigma_imp_iw[C].data[:,i,j] = total[:]
   return err
 
+def symmetrize_cluster_impurities(X_imp_iw, identical_pairs_across_impurities, name="quantity"):
+  err = False
+  for rxry in identical_pairs_across_impurities.keys():
+    Cdummy = identical_pairs_across_impurities[rxry][0][0]
+    #print identical_pairs_across_impurities[rxry][0]
+    #print Cdummy 
+    total = deepcopy(X_imp_iw[Cdummy].data[:,0,0])
+    total[:] = 0.0   
+    counter = 0
+    for ip in identical_pairs_across_impurities[rxry]:
+        C,i,j = ip[0],ip[1],ip[2]
+        if (i==-1) or (j==-1): continue
+        total += X_imp_iw[C].data[:,i,j]
+        counter += 1 
+    total[:] /= counter 
+    for ip in identical_pairs_across_impurities[rxry]:
+        C,i,j = ip[0],ip[1],ip[2]
+        if (i==-1) or (j==-1): continue
+        if numpy.any(numpy.greater(numpy.abs(X_imp_iw[C].data[:,i,j]-total[:]), 5e-3)):
+          err = True  
+          if mpi.is_master_node():
+            print "symmetrize_cluster_impurities: WARNING!! %s[%s][:,%s,%s] far from average"%(name,C,i,j)
+        X_imp_iw[C].data[:,i,j] = total[:]
+  return err
 
-def symmetric_G_and_self_energy_on_impurity(G_imp_iw, Sigma_imp_iw, solvers, identical_pairs_Sigma, identical_pairs_G):
+
+def symmetric_G_and_self_energy_on_impurity(G_imp_iw, Sigma_imp_iw, solvers, identical_pairs_Sigma, identical_pairs_G, across_imps = False, identical_pairs_G_ai = []):
   M_imp_dict = {}
   blocks = [name for name, g in solvers[solvers.keys()[0]].G0_iw]
   for b in blocks:
@@ -71,14 +96,15 @@ def symmetric_G_and_self_energy_on_impurity(G_imp_iw, Sigma_imp_iw, solvers, ide
     for b in blocks:
       M_imp_dict[b][C] << solvers[C].M_iw[b]
   for b in blocks:  
-    symmetrize_cluster_impurity(M_imp_dict[b], identical_pairs_Sigma)
+    symmetrize_cluster_impurity(M_imp_dict[b], identical_pairs_Sigma, "M_imp")
 
   G_imp_dict = deepcopy(M_imp_dict)
   for C in solvers.keys():
     for b in blocks:  
       G_imp_dict[b][C] << solvers[C].G0_shift_iw[b] + solvers[C].G0_shift_iw[b]*M_imp_dict[b][C]*solvers[C].G0_shift_iw[b]
   for b in blocks:  
-    symmetrize_cluster_impurity(G_imp_dict[b], identical_pairs_G)
+    symmetrize_cluster_impurity(G_imp_dict[b], identical_pairs_G, "G_imp")
+    if across_imps: symmetrize_cluster_impurities(G_imp_dict[b], identical_pairs_G_ai, "G_imp")
 
   shift = {}      
   for C in solvers.keys():
