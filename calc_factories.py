@@ -26,7 +26,7 @@ def prepare_nested( data, nested_scheme, solver_class = solvers.ctint ):
 
   data.get_Gkw = lambda: full_fill_Gkw_from_iws_mus_epsiolonk_and_Sigmakw(data.Gkw, data.iws, data.mus, data.epsilonk, data.Sigmakw)
   data.get_G_loc = lambda: full_fill_local_from_latt(data.G_loc_iw, data.Gkw)
-  data.get_n_from_G_loc = lambda: blockwise_get_n_from_G_loc_iw(G_loc_iw['up'], fit_tail_starting_iw = 14.0, ntau = None, site_index = 0)
+  data.get_n_from_G_loc = lambda: blockwise_get_n_from_G_loc_iw(data.G_loc_iw['up'], fit_tail_starting_iw = 14.0, ntau = None, site_index = 0)
                                   
   data.get_Gijw = lambda: full_fill_Gijw_from_Gkw(data.Gijw, data.Gkw, N_cores=1)
 
@@ -52,7 +52,7 @@ def prepare_cumul_nested( data, nested_scheme, solver_class = solvers.ctint  ):
 
   data.get_Gkw = lambda: full_fill_Gkw_from_epsiolonk_and_gkw(data.Gkw, data.epsilonk, data.gkw)
   data.get_G_loc = lambda: full_fill_local_from_latt(data.G_loc_iw, data.Gkw)
-  data.get_n_from_G_loc = lambda: blockwise_get_n_from_G_loc_iw(G_loc_iw['up'], fit_tail_starting_iw = 14.0, ntau = None, site_index = 0)
+  data.get_n_from_G_loc = lambda: blockwise_get_n_from_G_loc_iw(data.G_loc_iw['up'], fit_tail_starting_iw = 14.0, ntau = None, site_index = 0)
   data.get_Gijw = lambda: full_fill_Gijw_from_Gkw(data.Gijw, data.Gkw, N_cores=1)
   
   data.set_mu = lambda mu: set_mu(mu, data)
