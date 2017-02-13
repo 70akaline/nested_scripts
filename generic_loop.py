@@ -273,8 +273,10 @@ class monitor:
   def monitor(self):
     try:  
       self.values.append(copy.deepcopy(self.mq()))    
-    except:
-      if mpi.is_master_node(): print "monitor: ",h5key," cound not read the value. appending nan..."
+    except Exception as e:
+      if mpi.is_master_node():
+        print "monitor: ",self.h5key," cound not read the value. appending nan..."
+        print e
       self.values.append(float('nan'))    
     if mpi.is_master_node() and (not (self.archive_name is None)):
       A = HDFArchive(self.archive_name)
