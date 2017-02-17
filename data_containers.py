@@ -34,6 +34,7 @@ import copy
 #     scalar functions
 
 #--------------------------------------------------------------------------#
+
 class interpolation:
   @staticmethod
   def linear(x, x1, x2, Q1, Q2):
@@ -203,6 +204,36 @@ class IBZ:
          Q[-kxi,kyi] = Q[kxi,kyi]
          Q[kxi,-kyi] = Q[kxi,kyi]
          Q[-kxi,-kyi] = Q[kxi,kyi]
+
+  @staticmethod
+  def get_Qkw_on_path(Q, wi, only_positive = False):
+      nk = len(Q[0,0,:])
+      #print nk
+      ks = numpy.linspace(0,2*pi,nk, endpoint=False)
+      #print ks
+      if only_positive:
+        shift = 0  
+      else:  
+        shift = len(Q[:,0,0])/2
+      
+      ys= []
+      xs= []
+      xtcs = [0.0]
+      for i in range(nk/2+1):
+          ys.append(Q[shift+wi,i,0])
+          xs.append(ks[i])
+      xtcs.append(xs[-1])    
+      for i in range(1,nk/2+1):
+          ys.append(Q[shift+wi,nk/2,i])
+          xs.append(math.pi+ks[i])        
+      counter=1    
+      xtcs.append(xs[-1])
+      for i in reversed(range(nk/2)):
+          ys.append(Q[shift+wi,i,i]) 
+          xs.append(2.0*math.pi+counter*math.sqrt(2.0)*math.pi/(nk/2.0))
+          counter +=1
+      xtcs.append(xs[-1])    
+      return xs,ys, xtcs 
 
 
 ################################ DATA ##########################################
