@@ -106,8 +106,8 @@ def prepare_cellular( data, Lx, Ly, solver_class = solvers.ctint  ):
   data.get_Gijkw = lambda: full_fill_Gijkw(data.Gijkw, data.iws, data.mus, data.epsilonijk, data.Sigmaijkw)
   data.get_G_ij_loc = lambda: full_fill_G_ij_iw(data.G_ij_iw, data.Gijkw)
   data.get_Gijw = data.get_G_ij_loc #this is needed for the nested_mains.lattice
-  print 'imp_block: ', data.imp_block
-  data.get_n_from_G_ij_loc = lambda: blockwise_get_n_from_G_loc_iw(data.G_ij_iw[data.imp_block], fit_tail_starting_iw = 14.0, ntau = None, site_index = 0)
+  print 'imp_key: ', data.imp_key
+  data.get_n_from_G_ij_loc = lambda: blockwise_get_n_from_G_loc_iw(data.G_ij_iw[data.imp_key], fit_tail_starting_iw = 14.0, ntau = None, site_index = 0)
                                #full_fill_ns_from_G_loc_iw(data.ns, data.G_ij_iw, fit_tail_starting_iw = 14.0, ntau = None)
 
   data.set_mu = lambda mu: set_mu(mu, data)
