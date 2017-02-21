@@ -37,6 +37,7 @@ def nested_calculation( clusters, nested_struct_archive_name = None,
                         accuracy = 1e-4, 
                         solver_data_package = None,
                         print_current = 1,
+                        insulating_initial = False,
                         initial_guess_archive_name = '', suffix=''):
 
   if mpi.is_master_node():
@@ -319,9 +320,11 @@ def nested_calculation( clusters, nested_struct_archive_name = None,
         if 'down' in dt.fermionic_struct.keys(): dt.mus['down'] = dt.mus['up']   #this is not necessary at the moment, but may become
         for C in dt.impurity_struct.keys():
           for l in dt.impurity_struct[C]: #just the local components (but on each site!)         
-            dt.Sigma_imp_iw[C].data[:,l,l] = U/2.0
+            dt.Sigma_imp_iw[C].data[:,l,l] = U/2.0-int(insulating_initial)*1j/numpy.array(dt.ws)
         if not use_cumulant:
-          for key in fermionic_struct.keys(): dt.Sigmakw[key][:,:,:] = U/2.0    
+          for key in fermionic_struct.keys(): 
+            dt.Sigmakw[key][:,:,:] = U/2.0    
+            numpy.transpose(dt.Sigmakw[key])[:] -= int(insulating_initial)*1j/numpy.array(dt.ws)
         else:
           for key in fermionic_struct.keys(): numpy.transpose(dt.gkw[key])[:] = numpy.array(dt.iws[:])**(-1.0)    
       if not use_cumulant:
