@@ -202,9 +202,10 @@ def nested_calculation( clusters, nested_struct_archive_name = None, flexible_Gw
                                                 )
                               ),
                 generic_action(  name = "pre_impurity",
-                    main = lambda data: nested_mains.pre_impurity(data),
-                    mixers = [], cautionaries = [lambda data,it: Gweiss_causal_cautionary(data.Gweiss_iw) ], allowed_errors = [0],    
-                    printout = lambda data, it: (data.dump_general( quantities = ['Gweiss_iw'], suffix='-current' ) if ((it+1) % print_current==0) else None)  ),
+                    main = lambda data: nested_mains.pre_impurity(data),   
+                    #mixers = [], cautionaries = [lambda data,it: Gweiss_causal_cautionary(data.Gweiss_iw) ], allowed_errors = [0],
+                    mixers = [], cautionaries = [lambda data,it: ph_symmetric_Gweiss_causal_cautionary( data, ntau=5000 ) ], allowed_errors = [0],        
+                    printout = lambda data, it: (data.dump_general( quantities = ['Gweiss_iw_unfit','Gweiss_iw','Delta_iw','Delta_iw_fit','Delta_tau','Delta_tau_fit'], suffix='-%s'%it ) ),
                 generic_action(  name = "impurity",
                     main = (lambda data: nested_mains.impurity(data, U, symmetrize_quantities = True, alpha=alpha, delta=delta, automatic_alpha_and_delta = automatic_alpha_and_delta, 
                                                                n_cycles=n_cycles, max_times = max_times, solver_data_package = solver_data_package ))

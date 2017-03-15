@@ -129,6 +129,19 @@ def get_Delta_from_Gweiss_and_H0(Gweiss, H0, mu):
     Delta -= inverse(Gweiss)
     return Delta
 
+def get_Gweiss_from_Delta_and_H0(Delta, H0, mu):
+    Gweiss = Delta.copy()    
+    Gweiss << 0.0
+    iws = numpy.array([iw for iw in Delta.mesh])
+    nw,Nsites,dummy = numpy.shape(Delta.data)
+    assert numpy.shape(H0) == (Nsites,Nsites)
+    for i in range(Nsites):
+        Gweiss.data[:,i,i] = iws[:]+mu
+    Gweiss.data[:,:,:] -= H0
+    Gweiss -= Delta
+    Gweiss = inverse(Gweiss)
+    return Gweiss
+
 #-----------------------------------------------------------------------------------------------------------------------------------------------#
 def blockwise_get_G_loc_tau_from_G_loc_iw(G_loc_iw,                                          
                                           fit_tail_starting_iw = 14.0, ntau = None):
