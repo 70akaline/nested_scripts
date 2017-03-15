@@ -18,7 +18,7 @@ from copy import deepcopy
 from nested_scripts import *
 
 
-def nested_calculation( clusters, nested_struct_archive_name = None,
+def nested_calculation( clusters, nested_struct_archive_name = None, flexible_Gweiss=False, sign=-1, sign_up_to=2, 
                         Us = [1.0],
                         Ts = [0.125], 
                         ns = [0.5], fixed_n = True,
@@ -164,8 +164,11 @@ def nested_calculation( clusters, nested_struct_archive_name = None,
       prepare = prepare_nested
     else: 
       prepare = prepare_cumul_nested
-    prepare( dt, nested_scheme, solver_class )
-    
+    if flexible_Gweiss:
+      prepare( dt, nested_scheme, solver_class, flexible_Gweiss, sign, sign_up_to )
+    else:  
+      prepare( dt, nested_scheme, solver_class )
+
     solver_class.initialize_solvers( dt, solver_data_package )
  
     max_times = {}
@@ -200,7 +203,7 @@ def nested_calculation( clusters, nested_struct_archive_name = None,
                               ),
                 generic_action(  name = "pre_impurity",
                     main = lambda data: nested_mains.pre_impurity(data),
-                    mixers = [], cautionaries = [], allowed_errors = [],    
+                    mixers = [], cautionaries = [lambda data,it: Gweiss_causal_cautionary(data.Gweiss_iw) ], allowed_errors = [0],    
                     printout = lambda data, it: (data.dump_general( quantities = ['Gweiss_iw'], suffix='-current' ) if ((it+1) % print_current==0) else None)  ),
                 generic_action(  name = "impurity",
                     main = (lambda data: nested_mains.impurity(data, U, symmetrize_quantities = True, alpha=alpha, delta=delta, automatic_alpha_and_delta = automatic_alpha_and_delta, 
@@ -211,7 +214,7 @@ def nested_calculation( clusters, nested_struct_archive_name = None,
                                                  lambda data,it: ( symmetric_G_and_self_energy_on_impurity(data.G_imp_iw, data.Sigma_imp_iw, data.solvers, 
                                                                                                            identical_pairs_Sigma, identical_pairs_G,
                                                                                                            across_imps=True, identical_pairs_G_ai=identical_pairs_G_ai  )
-                                                                   if it>=3 else  
+                                                                   if it>=10 else  
                                                                    symmetrize_cluster_impurity(data.Sigma_imp_iw, identical_pairs_Sigma) )
                                                 ], allowed_errors = [1],    
                     printout = lambda data, it: ( [ data.dump_general( quantities = ['Sigma_imp_iw','G_imp_iw'], suffix='-current' ),
@@ -367,10 +370,14 @@ def nested_calculation( clusters, nested_struct_archive_name = None,
     #run nested!-------------
 
     if mix_Sigma:
-      actions[3].mixers.append(mixer( mixed_quantity = lambda: (dt.Sigmakw if (not use_cumulant) else dt.gkw),
+      actions[3].mixers.extend([ mixer( mixed_quantity = lambda: (dt.Sigmakw if (not use_cumulant) else dt.gkw),
                                       rules=rules,
                                       func=mixer.mix_lattice_gf,
-                                      initialize = True )) 
+                                      initialize = True ) ])
+      actions[2].mixers.extend([ mixer( mixed_quantity = lambda: dt.Sigma_imp_iw,
+                                      rules=rules,
+                                      func=mixer.mix_block_gf,
+                                      initialize = True ) ])
 
     dt.dump_parameters()
     dt.dump_non_interacting() 

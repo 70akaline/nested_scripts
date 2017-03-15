@@ -14,8 +14,11 @@ def set_mu(mu, data):
   for key in data.mus.keys():
     data.mus[key] = mu
 
+def is_zero(bg):
+  return sum([ numpy.count_nonzero(g.data) for name, g in bg ]) == 0
+
 #----------------------------- nested -----------------------------------------------------------------------#
-def prepare_nested( data, nested_scheme, solver_class = solvers.ctint ):
+def prepare_nested( data, nested_scheme, solver_class = solvers.ctint, flexible_Gweiss=False, sign=-1, sign_up_to=2 ):
   assert data.__class__ == nested_data, "wrong data type"
   assert data.fermionic_struct == {'up': [0]}, "wrong fermionic struct for this calcalation"
   assert data.impurity_struct == nested_scheme.get_impurity_struct(), "wrong impurity struct for this nested scheme" 
@@ -34,7 +37,14 @@ def prepare_nested( data, nested_scheme, solver_class = solvers.ctint ):
   data.get_mu = lambda: data.mus['up']
   data.get_n = lambda: [data.get_Gkw(), data.get_G_loc(), set_n(data.get_n_from_G_loc(),data)][-1]
 
-  data.get_Gweiss = lambda: full_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw(data.Gweiss_iw,data.Gijw,data.Sigma_imp_iw, mapping = nested_scheme.get_imp_to_latt_mapping()) 
+  if flexible_Gweiss:
+    data.get_Gweiss = lambda: ( flexible_Gweiss_iw_from_Gweiss_iw_Gijw_and_G_imp_iw(data.Gweiss_iw, data.Gijw, data.G_imp_iw, 
+                                                                                    nested_scheme.get_imp_to_latt_mapping(), sign, sign_up_to)
+                                if not is_zero(data.Gweiss_iw) else
+                                full_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw(data.Gweiss_iw,data.Gijw,data.Sigma_imp_iw, mapping = nested_scheme.get_imp_to_latt_mapping())    
+                              )
+  else:
+    data.get_Gweiss = lambda: full_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw(data.Gweiss_iw,data.Gijw,data.Sigma_imp_iw, mapping = nested_scheme.get_imp_to_latt_mapping())  
 
   data.dump_solvers = lambda suffix: [solver_class.dump( data.solvers[C], data.archive_name, suffix='-%s%s'%(C,suffix) ) for C in data.impurity_struct.keys()]
 
@@ -120,4 +130,6 @@ def prepare_cellular( data, Lx, Ly, solver_class = solvers.ctint  ):
 
   data.periodize_cumul = lambda: periodize_cumul(data.Gkw, data.Sigmakw, data.gkw, data.gijw, data.g_imp_iw, data.iws, data.mus, data.epsilonk, data.Sigma_imp_iw, Lx, Ly)
   data.periodize_selfenergy = lambda: periodize_selfenergy(data.Gkw, data.Sigmakw, data.Sigmaijw, data.iws, data.mus, data.epsilonk, data.Sigma_imp_iw, Lx, Ly)
+
+  data.dump_solvers = lambda suffix: [solver_class.dump( data.solvers[C], data.archive_name, suffix='-%s%s'%(C,suffix) ) for C in data.impurity_struct.keys()]
 

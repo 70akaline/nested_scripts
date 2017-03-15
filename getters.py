@@ -27,6 +27,50 @@ def sgn(x):
   else:
     return -1
 
+
+def initCubicTBH(Nx, Ny, Nz, eps, t, cyclic=True):
+  H = [[0 for j in range(Nx*Ny*Nz)] for i in range(Nx*Ny*Nz)]  
+  for i in range(Nx*Ny*Nz):
+    H[i][i]=eps    
+  for i in range(Nx):
+    for j in range(Ny):
+      for k in range(Nz): 
+        if Nx>1:
+          if i+1==Nx:
+            if cyclic: H [ k*Nx*Ny+j*Nx+i ]  [ k*Nx*Ny + j*Nx ] = t
+          else:
+            H [ k*Nx*Ny+j*Nx+i ]  [ k*Nx*Ny + j*Nx + i+1 ] = t
+        
+          if i==0:
+            if cyclic: H [ k*Nx*Ny+j*Nx+i ]  [ k*Nx*Ny + j*Nx + Nx-1] = t
+          else:
+            H [ k*Nx*Ny+j*Nx+i ]  [ k*Nx*Ny + j*Nx + i-1] = t  
+            
+        if Ny>1:
+          if j+1==Ny:
+            if cyclic: H [ k*Nx*Ny+j*Nx+i ]  [ k*Nx*Ny + i ] = t
+          else:  
+            H [ k*Nx*Ny+j*Nx+i ]  [ k*Nx*Ny + (j+1)*Nx + i ] = t
+        
+          if j==0:
+            if cyclic: H [ k*Nx*Ny+j*Nx+i ]  [ k*Nx*Ny + (Ny-1)*Nx + i ] = t
+          else:
+            H [ k*Nx*Ny+j*Nx+i ]  [ k*Nx*Ny + (j-1)*Nx + i ] = t
+
+        if Nz>1:
+          if (k+1==Nz): 
+            if cyclic: H [ k*Nx*Ny+j*Nx+i ]  [ j*Nx + i ] = t
+          else:
+            H [ k*Nx*Ny+j*Nx+i ]  [ (k+1)*Nx*Ny + j*Nx + i ] = t 
+            
+          if k==0:
+            if cyclic: H [ k*Nx*Ny+j*Nx+i ]  [ (Nz-1)*Nx*Ny + j*Nx + i ] = t
+          else:
+            H [ k*Nx*Ny+j*Nx+i ]  [ (k-1)*Nx*Ny + j*Nx + i ] = t
+    
+  return H 
+
+
 #---------- dispersions and bare interactions ----------------------------------------#
 def Jq_square(qx, qy, J):
   return 2.0*J*(cos(qx)+cos(qy))
@@ -53,7 +97,6 @@ def total_inverse_FT(Qkw,
    return spatial_inverse_FT(Qktau, N_cores=N_cores)
 
 
-
 #-----------------------------------------------------------------------------------------------------------------------------------------------#
 def blockwise_get_Gijtau_from_Gkw(Gkw, 
                                   beta, ntau, n_iw, n_k,
@@ -73,6 +116,18 @@ def full_fill_Sigmakw_from_Sigmaijw(Sigmakw, Sigmaijw, N_cores=1): #only use for
   for U in Sigmaijw.keys():
     Sigmakw[U][:,:,:] = spatial_FT(Sigmaijw[U], N_cores=N_cores)
 
+#-------------------------------------------------------------------------------------------------------------------------------------------------#
+def get_Delta_from_Gweiss_and_H0(Gweiss, H0, mu):
+    Delta = Gweiss.copy()    
+    Delta << 0.0
+    iws = numpy.array([iw for iw in Gweiss.mesh])
+    nw,Nsites,dummy = numpy.shape(Gweiss.data)
+    assert numpy.shape(H0) == (Nsites,Nsites)
+    for i in range(Nsites):
+        Delta.data[:,i,i] = iws[:]+mu
+    Delta.data[:,:,:] -= H0
+    Delta -= inverse(Gweiss)
+    return Delta
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------#
 def blockwise_get_G_loc_tau_from_G_loc_iw(G_loc_iw,                                          
@@ -211,6 +266,40 @@ def full_fill_Sigmaijw_from_Sigma_imp_iw(Sigmaijw, Sigma_imp_iw, mapping):
             i = mp[2]
             j = mp[3]
             Sigmaijw[U][:,x,y] += pref * Sigma_imp_iw[C].data[:,i,j]
+
+def blockwise_flexible_Gweiss_iw_from_Gweiss_iw_Gijw_and_G_imp_iw(Gweiss_iw,Gijw,G_imp_iw,
+                                                                  mapping, sign, sign_up_to ):
+  if mpi.is_master_node(): print "blockwise_flexible_Gweiss_iw_from_Gweiss_iw_Gijw_and_G_imp_iw"
+  n_sites = len(Gweiss_iw.data[0,0,:])
+  nw = len(Gweiss_iw.data[:,0,0])
+  Gtemp = numpy.zeros((nw,n_sites,n_sites), dtype=numpy.complex_)
+  for i in range(n_sites):
+    for j in range(n_sites):
+       Gtemp[:,i,j] = Gijw[:,mapping(i,j)[0], mapping(i,j)[1]] 
+
+  invGtemp = Gtemp[:,:,:]
+  for wi in range(nw):
+    n_mats = wi-nw/2    
+    if sign_up_to == -1: sign_up_to = nw
+    if ( n_mats>=0 and n_mats<sign_up_to) \
+        or n_mats<0 and abs(n_mats)-1<sign_up_to:
+        sgn = sign
+    else: sgn= -sign    
+    invGtemp[wi,:,:] = inv(Gtemp[wi,:,:])
+    Gweiss_iw.data[wi,:,:] = inv( inv(Gweiss_iw.data[wi,:,:]) + sgn*(invGtemp[wi,:,:] - inv(G_imp_iw.data[wi,:,:])) )
+
+  fit_fermionic_gf_tail(Gweiss_iw)
+
+def flexible_Gweiss_iw_from_Gweiss_iw_Gijw_and_G_imp_iw(Gweiss_iw, Gijw, G_imp_iw, mapping = lambda C,i,j: [0,0], 
+                                                        sign=1, sign_up_to=-1):      
+  if mpi.is_master_node(): print "flexible_Gweiss_iw_from_Gweiss_iw_Gijw_and_G_imp_iw"
+  assert 'up' in Gijw.keys(), "this assumes there is only one block in lattice functions. should be generalized for magnetized calculations" 
+  block_names = [name for name,g in Gweiss_iw]   
+  for C in block_names:
+    blockwise_flexible_Gweiss_iw_from_Gweiss_iw_Gijw_and_G_imp_iw(
+        Gweiss_iw[C],Gijw['up'],G_imp_iw[C], mapping= lambda i,j: mapping(C,i,j), sign=sign, sign_up_to=sign_up_to ) 
+  if mpi.is_master_node(): print "done!"
+
 
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------#

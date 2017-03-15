@@ -166,7 +166,7 @@ class mixer:
     #mix the monitored bosonic Gf
     ratio = 0.0
     for rule in self.rules:
-      if loop_index>rule[0]:
+      if loop_index>=rule[0]:
         ratio = rule[1]
 
     if self.func is None:
