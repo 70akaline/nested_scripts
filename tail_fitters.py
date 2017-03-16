@@ -12,22 +12,22 @@ import pytriqs.utility.mpi as mpi
 import copy
 
 def fit_fermionic_sigma_tail(Q, starting_iw=14.0, no_hartree=False, no_loc=False):
-  Nc = len(Q.data[0,:,0])  
+  Nc = len(Q.data[0,:,0])    
   if no_loc:
     known_coeff = TailGf(Nc,Nc,3,-1)
-    known_coeff[-1] = numpy.zeros((Nc,Nc))
-    known_coeff[0] = numpy.zeros((Nc,Nc))
-    known_coeff[1] = numpy.zeros((Nc,Nc))
+    known_coeff[-1] = numpy.zeros((Nc,Nc),dtype=numpy.complex)
+    known_coeff[0] = numpy.zeros((Nc,Nc),dtype=numpy.complex)
+    known_coeff[1] = numpy.zeros((Nc,Nc),dtype=numpy.complex)
   elif no_hartree:
     known_coeff = TailGf(Nc,Nc,2,-1)
     known_coeff[-1] = numpy.zeros((Nc,Nc))
     known_coeff[0] = numpy.zeros((Nc,Nc))
   else:
     known_coeff = TailGf(Nc,Nc,1,-1)
-    known_coeff[-1] = numpy.zeros((Nc,Nc))
+    known_coeff[-1] = numpy.zeros((Nc,Nc),dtype=numpy.complex)
   nmax = Q.mesh.last_index()
   nmin = int(((starting_iw*Q.beta)/math.pi-1.0)/2.0) 
-  Q.fit_tail(known_coeff,5,nmin,nmax)
+  Q.fit_tail(known_coeff,5,nmin,nmax, True)
 
 def fit_fermionic_gf_tail(Q, starting_iw=14.0):
   Nc = len(Q.data[0,0,:])

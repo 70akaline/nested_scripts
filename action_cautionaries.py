@@ -11,6 +11,10 @@ import pytriqs.utility.mpi as mpi
 from copy import deepcopy
 from tail_fitters import symmetrize_blockgf
 
+def impose_real_valued_in_imtime(Q):
+  Q.data[:,:,:] += numpy.conjugate(Q.data[::-1,:,:])
+  Q /= 2.0
+
 def nonloc_sign_cautionary(Q, clip_value = 0.0, desired_sign = -1, clip_off = False, real_or_imag = 'imag'):
       clip_off = clip_off and not (real_or_imag=='imag')
       clipped = False

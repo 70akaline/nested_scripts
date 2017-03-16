@@ -1,3 +1,15 @@
+from pytriqs.operators import *
+from pytriqs.archive import *
+from pytriqs.gf.local import *
+from pytriqs.arrays import BlockMatrix, BlockMatrixComplex
+import pytriqs.utility.mpi as mpi
+
+from copy import deepcopy
+from numpy import exp
+
+import numpy
+from numpy.linalg import inv
+
 import random
 
 def second_derivative(a, dx=1, axis=0):
@@ -208,7 +220,7 @@ def fit(G, epss_init, Vs_init, kinds_init, P_init=1.0, n_mats = 5, max_its = 100
         #assert len(x) == 1 + (2.0*Nsites+1)*(Nstates), "wrong size array"
         assert len(x) == 2*Nstates, "wrong size array"
         epss, Vs = epssVs_from_x(x)
-        W, V = ph_symm_V_from_params(epss, Vs, kinds, Nsites)
+        W, V = ph_symm_V_from_params(epss, Vs, kinds_init, Nsites)
         Gtemp = G.copy()
         G_from_params(Gtemp, P, W, V)        
         d = diff(G, Gtemp, n_mats)           
@@ -223,14 +235,20 @@ def fit(G, epss_init, Vs_init, kinds_init, P_init=1.0, n_mats = 5, max_its = 100
     x0 = x_from_epssVs(epss_init,Vs_init)
            
     #minimize(func, x0, method='Nelder-Mead', options = {'maxiter': 50})
-    print "------------ before" 
-    print "x0: ", x0
+    #print "------------ before" 
+    #print "x0: ", x0
     printout()    
     stochastic_minimize(func, x0, max_its=max_its, printout=printout, T=T) 
     
     return epssVs_from_x(x0)
 
+from tail_fitters import fit_fermionic_sigma_tail
 from tail_fitters import fit_fermionic_gf_tail
+from getters import initCubicTBH
+from getters import get_Delta_from_Gweiss_and_H0
+from getters import get_Gweiss_from_Delta_and_H0
+from action_cautionaries import impose_real_valued_in_imtime
+
 def ph_symmetric_Gweiss_causal_cautionary( data, ntau=5000):   
   assert sorted(data.impurity_struct.keys()) == ['1x1','2x1','2x2'], "not applicable to any other scheme than nested plaquette. impurity_struct: "+str(data.impurity_struct.keys())
   print "######### Checking causality of Gweiss ########"
@@ -242,7 +260,7 @@ def ph_symmetric_Gweiss_causal_cautionary( data, ntau=5000):
   gs = []
   for C in data.impurity_struct.keys(): 
       gs.append ( GfImTime(indices = data.impurity_struct[C], beta = data.beta, n_points =ntau, statistic = 'Fermion') )     
-  data.Delta_tau = BlockGf(name_list = self.impurity_struct.keys(), block_list = gs, make_copies = False)
+  data.Delta_tau = BlockGf(name_list = data.impurity_struct.keys(), block_list = gs, make_copies = False)
   data.Delta_tau_fit = data.Delta_tau.copy()
     
   for C, g in data.Gweiss_iw:
@@ -268,7 +286,11 @@ def ph_symmetric_Gweiss_causal_cautionary( data, ntau=5000):
       for i,j in [(0,3),(1,2)]:        
           data.Delta_iw[C].data[:,i,j] -= data.Delta_iw[C].data[:,i,j].real    
           data.Delta_iw[C].data[:,j,i] -= data.Delta_iw[C].data[:,j,i].real      
-        
+    
+    impose_real_valued_in_imtime(data.Delta_iw[C])    
+       
+    #data.dump_general( quantities = ['Delta_iw'], suffix='-check' )
+
     fit_fermionic_sigma_tail(data.Delta_iw[C])
     data.Delta_tau[C] << InverseFourier(data.Delta_iw[C])
 
@@ -277,37 +299,62 @@ def ph_symmetric_Gweiss_causal_cautionary( data, ntau=5000):
     needs_fixing = False
     for taui in range(0,ntau-2):        
         w,v = numpy.linalg.eig(d2tauDelta[taui,:,:].real)
-        ws[taui,:] = sorted(w)
-        if len([ww for ww in numpy.ravel(ws) if ww>0])>0: needs_fixing = True
+        #print "eigvalues: ", w
+        ws[taui,:] = sorted(numpy.real(w))        
+    if len([ww for ww in numpy.ravel(ws) if ww>0])>0:
+      needs_fixing = True
+      print "max eigenvalue: ",numpy.amax(numpy.ravel(ws))
+    
     if needs_fixing:
-      print "WARNING: Delta_iw[%s] unphysical and needs fixing!!!"
+      print "WARNING: Delta_iw[%s] unphysical and needs fixing!!!"%C
 
-    P = 0.01
-    if nsites==4:
-      epss=  [0.19668414224046424, -0.242286049378347, -0.4851071850062886, 0.6083462424661663]
-      Vs=  [1.111030853547017, 0.95763987021629182, 1.3705081047849843, 0.80333649203756208]
-      kinds=[0,1,0,1]
-    elif nsites<4:
-      epss=  [0.19668414224046424, -0.242286049378347]
-      Vs=  [1.111030853547017, 0.95763987021629182]
-      kinds=[0,0]
+    for att in range(3):
+      P = 0.01
+      epss = []
+      Vs = []
+      kinds = []
+      if nsites==4:
+        epss.extend([0.19668414224046424, -0.242286049378347, -0.4851071850062886, 0.6083462424661663])
+        Vs.extend([1.111030853547017, 0.95763987021629182, 1.3705081047849843, 0.80333649203756208])
+        kinds.extend([0,1,0,1])
+      elif nsites<4:
+        epss.extend([0.19668414224046424, -0.242286049378347])
+        Vs.extend([1.111030853547017, 0.95763987021629182])
+        kinds.extend([0,0])
 
-    for T in [0.01,0.001]:    
-        epss,Vs = fit(data.Delta_iw[C], epss, Vs, kinds, P, n_mats = 5, max_its = 10000 )
+      
+      for T in [0.025*nsites]:    
+          epss,Vs = fit(data.Delta_iw[C], epss, Vs, kinds, P, n_mats = 5, max_its = 10000, T=T )
 
-        W,V = ph_symm_V_from_params(epss, Vs, kinds, Nsites=4)
-        
-        G_from_params(data.Delta_iw_fit[C], P, W, V)
-           
-        epss.extend([1.0,1.0])    
-        Vs.extend([0.001,0.001])    
-        kinds.extend([0,1])
-                   
-    for T in [0.001]:
-        stochastic_complete(data.Delta_iw[C], data.Delta_iw_fit[C], [-0.0001,0.0001], [-3.0,3.0], 10000,
-                            T = T, max_its=10000, n_mats = 5, printout=None, Nit_print=1000)    
+          W,V = ph_symm_V_from_params(epss, Vs, kinds, Nsites=nsites)
+          
+          G_from_params(data.Delta_iw_fit[C], P, W, V)
+             
+          epss.extend([1.0,1.0])    
+          Vs.extend([0.001,0.001])    
+          kinds.extend([0,1])
+                     
+      for T in [0.00025*nsites]:
+          stochastic_complete(data.Delta_iw[C], data.Delta_iw_fit[C], [-0.0001,0.0001], [-3.0,3.0], 10000,
+                              T = T, max_its=40000, n_mats = 5, printout=None, Nit_print=1000)    
 
-    data.Gweiss[C] = get_Gweiss_from_Delta_and_H0(data.Delta_iw_fit[C], H0, mus['up'])    
-
+      fit_fermionic_sigma_tail(data.Delta_iw_fit[C])
+      data.Gweiss_iw[C] = get_Gweiss_from_Delta_and_H0(data.Delta_iw_fit[C], H0, data.mus['up'])  
+      impose_real_valued_in_imtime(data.Gweiss_iw[C])    
+      fit_fermionic_gf_tail(data.Gweiss_iw[C])
+      #data.dump_general( quantities = ['Delta_iw_fit','Gweiss_iw_unfit','Gweiss_iw'], suffix='-check' )
+    
+      max_diff_Gweiss = numpy.amax(numpy.abs(data.Gweiss_iw[C].data - data.Gweiss_iw_unfit[C].data))
+      max_diff_Delta =  numpy.amax(numpy.abs(data.Delta_iw[C].data - data.Delta_iw_fit[C].data))
+      print "---- max diff Gweiss: ", max_diff_Gweiss  
+      print "---- max diff Delta: ", max_diff_Delta
+      if max_diff_Gweiss<2e-3 and max_diff_Delta<2e-3:
+        print "---- ---- fit satsfactory!"
+        break
+      else:
+        if att<2:
+          print "---- ---- fit not satsfactory! trying again..."
+        else:
+          print "---- ---- fit not satsfactory! tried already 3 times. better luck next time."
   print "#########           DONE!!!            ########"  
     

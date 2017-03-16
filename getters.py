@@ -139,7 +139,8 @@ def get_Gweiss_from_Delta_and_H0(Delta, H0, mu):
         Gweiss.data[:,i,i] = iws[:]+mu
     Gweiss.data[:,:,:] -= H0
     Gweiss -= Delta
-    Gweiss = inverse(Gweiss)
+    #fit_fermionic_gf_tail(Gweiss)
+    Gweiss << inverse(Gweiss)
     return Gweiss
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------#
