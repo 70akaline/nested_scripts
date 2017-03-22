@@ -89,7 +89,7 @@ class generic_loop:
                 name = "generic loop", 
                 actions = [],
                 convergers = [],  
-                monitors = [] ):
+                monitors = []):
     self.name = name 
     self.actions = actions
     self.convergers = convergers
@@ -100,7 +100,8 @@ class generic_loop:
                 min_its = 5, 
                 max_it_err_is_allowed = 7,
                 print_final = True,
-                print_current = 5):
+                print_current = 5,
+                start_from_action_index = 0 ):
     if mpi.is_master_node(): print "============================== running ",self.name, "================================="
 
     for conv in self.convergers:
@@ -113,7 +114,7 @@ class generic_loop:
       times = []
        
       err = False       
-      for action in self.actions:
+      for action in (self.actions if it>0 else self.actions[start_from_action_index:]):
         times.append((time(),action.name))
         err = (action.execute(data, it) or err)
 

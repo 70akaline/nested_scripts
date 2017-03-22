@@ -40,13 +40,15 @@ def fit_fermionic_gf_tail(Q, starting_iw=14.0):
   Q.fit_tail(known_coeff,5,nmin,nmax)
 
 def fit_and_remove_constant_tail(Q, starting_iw=14.0, max_order = 5):
-  known_coeff = TailGf(1,1,1,-1)
-  known_coeff[-1] = array([[0.]])
+  Nc = len(Q.data[0,0,:])
+  known_coeff = TailGf(Nc,Nc,1,-1)
+  known_coeff[-1] = zeros((Nc,Nc))
   nmax = Q.mesh.last_index()
   nmin = int(((starting_iw*Q.beta)/math.pi-1.0)/2.0) 
   Q.fit_tail(known_coeff,max_order,nmin,nmax)
-  tail0 = Q.tail[0][0,0]  
-  Q -= tail0
+  for l in range(Nc):
+    tail0 = Q.tail[0][l,l]  
+    Q[l,l] -= tail0
   Q.fit_tail(known_coeff,max_order,nmin,nmax)
   return tail0
 

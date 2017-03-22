@@ -19,7 +19,7 @@ from nested_scripts import *
 from nested_structure import get_identical_pair_sets
 
 
-def cellular_calculation( Lx=2, Ly=1,
+def cellular_calculation( Lx=2, Ly=1, periodized = False,
                           Us = [1.0],
                           Ts = [0.125], 
                           ns = [0.5], fixed_n = True,
@@ -38,7 +38,7 @@ def cellular_calculation( Lx=2, Ly=1,
                           accuracy = 1e-4, 
                           solver_data_package = None,
                           print_current = 1,
-                          initial_guess_archive_name = '', suffix=''):
+                          initial_guess_archive_name = '', suffix='', start_from_Gweiss = False):
 
   if mpi.is_master_node():
     print "WELCOME TO cellular calculation!"
@@ -144,7 +144,7 @@ def cellular_calculation( Lx=2, Ly=1,
         for kyi in range(dt.n_k):
           dt.epsilonijk[key][:,:,kxi,kyi] = dispersion(dt.ks[kxi], dt.ks[kyi])
 
-    prepare_cellular( dt, Lx, Ly, solver_class)
+    prepare_cellular( dt, Lx, Ly, solver_class, periodized )
     
     solver_class.initialize_solvers( dt, solver_data_package )
  
@@ -221,15 +221,22 @@ def cellular_calculation( Lx=2, Ly=1,
 
     if (counter==0): #do the initial guess only once!         
       if initial_guess_archive_name!='':
-        if mpi.is_master_node(): print "constructing dt from initial guess in a file: ",initial_guess_archive_name, "suffix: ",suffix
-        old_epsilonk = dt.epsilonk
-        dt.construct_from_file(initial_guess_archive_name, suffix) 
-        if dt.beta != beta:
-          dt.change_beta(beta, n_iw)
-        if dt.n_k != nk:
-          dt.change_ks(IBZ.k_grid(nk))
-        if mpi.is_master_node(): print "putting back the old Jq and epsilonk"
-        dt.epsilonk = old_epsilonk
+        if start_from_Gweiss: 
+          dt.mus['up'] = U/2.0
+          A = HDFArchive(initial_guess_archive_name,"r")
+          dt.Gweiss_iw << A['Gweiss_iw%s'%suffix]
+          del A 
+          dt.dump_general( quantities = ['Gweiss_iw'], suffix='-initial' )  
+        else:
+          if mpi.is_master_node(): print "constructing dt from initial guess in a file: ",initial_guess_archive_name, "suffix: ",suffix
+          old_epsilonk = dt.epsilonk
+          dt.construct_from_file(initial_guess_archive_name, suffix) 
+          if dt.beta != beta:
+            dt.change_beta(beta, n_iw)
+          if dt.n_k != nk:
+            dt.change_ks(IBZ.k_grid(nk))
+          if mpi.is_master_node(): print "putting back the old Jq and epsilonk"
+          dt.epsilonk = old_epsilonk
       else:
         if not fixed_n:  
           dt.mus['up'] = U/2.0 + mutilde
@@ -264,7 +271,8 @@ def cellular_calculation( Lx=2, Ly=1,
               min_its=min_its,
               max_it_err_is_allowed = 7,
               print_final=True, 
-              print_current = 1 )
+              print_current = 1,
+              start_from_action_index = (2 if start_from_Gweiss else 0) )
     if mpi.is_master_node():
       print "periodizing result..."
       print "filling scalar dispersion..."    

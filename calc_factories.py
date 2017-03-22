@@ -106,13 +106,16 @@ def prepare_dca( data, dca_scheme, solver_class = solvers.ctint ):
 
 #----------------------------- celullar -----------------------------------------------------------------------#
 
-def prepare_cellular( data, Lx, Ly, solver_class = solvers.ctint  ):
+def prepare_cellular( data, Lx, Ly, solver_class = solvers.ctint, periodized = False  ):
   assert data.__class__ == cellular_data, "wrong data type"
   assert data.fermionic_struct == {'up': [0]}, "wrong fermionic struct for this calcalation"
   assert len(data.impurity_struct.keys()) == 1, "in celullar we solve only one cluster" 
 
-  data.get_Sigmaijkw = lambda: full_fill_Sigmaijkw(data.Sigmaijkw, data.Sigma_imp_iw)
-
+  if periodized:
+    data.get_Sigmaijkw = lambda: full_fill_Sigmaijkw_periodized(data.Sigmaijkw, data.Sigma_imp_iw, data.ks)
+  else:
+    data.get_Sigmaijkw = lambda: full_fill_Sigmaijkw(data.Sigmaijkw, data.Sigma_imp_iw)
+  
   data.get_Gijkw = lambda: full_fill_Gijkw(data.Gijkw, data.iws, data.mus, data.epsilonijk, data.Sigmaijkw)
   data.get_G_ij_loc = lambda: full_fill_G_ij_iw(data.G_ij_iw, data.Gijkw)
   data.get_Gijw = data.get_G_ij_loc #this is needed for the nested_mains.lattice

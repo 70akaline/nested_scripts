@@ -339,6 +339,8 @@ def ph_symmetric_Gweiss_causal_cautionary( data, ntau=5000):
                               T = T, max_its=40000, n_mats = 5, printout=None, Nit_print=1000)    
 
       fit_fermionic_sigma_tail(data.Delta_iw_fit[C])
+      data.Delta_tau_fit[C] << InverseFourier(data.Delta_iw_fit[C])
+
       data.Gweiss_iw[C] = get_Gweiss_from_Delta_and_H0(data.Delta_iw_fit[C], H0, data.mus['up'])  
       impose_real_valued_in_imtime(data.Gweiss_iw[C])    
       fit_fermionic_gf_tail(data.Gweiss_iw[C])

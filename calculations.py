@@ -215,7 +215,7 @@ def nested_calculation( clusters, nested_struct_archive_name = None, flexible_Gw
                                                  lambda data,it: ( symmetric_G_and_self_energy_on_impurity(data.G_imp_iw, data.Sigma_imp_iw, data.solvers, 
                                                                                                            identical_pairs_Sigma, identical_pairs_G,
                                                                                                            across_imps=True, identical_pairs_G_ai=identical_pairs_G_ai  )
-                                                                   if it>=10 else  
+                                                                   if it>=0 else  
                                                                    symmetrize_cluster_impurity(data.Sigma_imp_iw, identical_pairs_Sigma) )
                                                 ], allowed_errors = [1],    
                     printout = lambda data, it: ( [ data.dump_general( quantities = ['Sigma_imp_iw','G_imp_iw'], suffix='-current' ),

@@ -14,6 +14,8 @@ import pytriqs.utility.mpi as mpi
 import numpy
 from numpy.linalg import inv
 
+from copy import deepcopy
+
 from math import cos, pi
 import cmath
 from cmath import exp
@@ -435,6 +437,43 @@ def full_fill_Sigmaijkw(Sigmaijkw, Sigma_imp_iw):
     assert len(impkeys)==1, "must be only one block in Sigma_imp_iw"      
     numpy.transpose(Sigmaijkw[Sigmaijkw.keys()[0]])[:,:,:] = numpy.transpose(Sigma_imp_iw[impkeys[0]].data)[:,:,:]
 
+def full_fill_Sigmaijkw_periodized(Sigmaijkw, Sigma_imp_iw, ks):
+    if mpi.is_master_node(): print "full_fill_Sigmaijkw_periodized"
+    assert len(Sigmaijkw.keys())==1, "must be only one block in Sigmaijkw"
+    impkeys = [name for name,g in Sigma_imp_iw]    
+    assert len(impkeys)==1, "must be only one block in Sigma_imp_iw"      
+    impkey = impkeys[0]
+    numpy.transpose(Sigmaijkw[Sigmaijkw.keys()[0]])[:,:,:] = numpy.transpose(Sigma_imp_iw[impkey].data)[:,:,:]    
+       
+    s = Sigma_imp_iw[impkey].data[:,0,1]
+    sp = Sigma_imp_iw[impkey].data[:,0,3]    
+    z = deepcopy(s)
+    z[:] = 0    
+    for kxi, kx in enumerate(ks):
+      for kyi, ky in enumerate(ks):
+        skx = s*exp(1j*kx)
+        sky = s*exp(1j*ky)
+        cskx = s*exp(-1j*kx)
+        csky = s*exp(-1j*ky)
+
+        B =       [[z,    skx,  sky,  z  ],
+                   [cskx, z,    z,    sky],
+                   [csky, z,    z,    skx],
+                   [z,    csky, cskx, z  ]]
+        spkAD = sp*numpy.conj(  exp(-1j*kx)+exp(-1j*ky) + exp(-1j*(kx+ky))  )
+        spkBC = sp*numpy.conj(  exp(1j*kx)+exp(-1j*ky) + exp(1j*(kx-ky))  )
+        spkDA = sp*(  exp(-1j*kx)+exp(-1j*ky) + exp(-1j*(kx+ky))  )
+        spkCB = sp*(  exp(1j*kx)+exp(-1j*ky) + exp(1j*(kx-ky))  )
+
+        C =       [[z,     z,     z,     spkAD ],
+                   [z,     z,     spkBC, z     ],
+                   [z,     spkCB, z,     z     ],
+                   [spkDA, z,     z,     z     ]]
+
+        BC = numpy.array(B)+numpy.array(C)
+        numpy.transpose(Sigmaijkw[Sigmaijkw.keys()[0]])[kyi,kxi,:,:,:] += BC
+       
+
 def full_fill_Gijkw(Gijkw, iws, mus, epsilonijk, Sigmaijkw):
   for U in Gijkw.keys():
     Gijkw[U][:,:,:,:,:] = blockwise_get_Gijkw(iws, mus[U], epsilonijk[U], Sigmaijkw[U])
@@ -542,8 +581,8 @@ def matrix_dispersion(Nc, t,tp, kx, ky):
                [ctky, 0,    0,    tkx],
                [0,    ctky, ctkx, 0  ]]
 
-    tpkAD = tp*(  2.0*cos(kx-ky) + exp(-1j*(kx+ky))  )
-    tpkBC = tp*(  2.0*cos(kx+ky) + exp(+1j*(kx-ky))  )
+    tpkAD = tp*(  exp(-1j*kx)+exp(-1j*ky) + exp(-1j*(kx+ky))  )
+    tpkBC = tp*(  exp(1j*kx)+exp(-1j*ky) + exp(1j*(kx-ky))  )
     tpkDA = numpy.conj(tpkAD)
     tpkCB = numpy.conj(tpkBC)
 
