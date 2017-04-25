@@ -155,3 +155,14 @@ class dca_mains:
     data.get_SigmaR()
     data.get_SigmaK()  
 
+class dca_plus_mains:
+  @staticmethod 
+  def selfenergy(data):
+    dca_mains.selfenergy(data)
+    data.get_XiK()
+    data.get_XiR()
+    data.get_Xik()
+    data.get_Sigmaimpk()
+    data.get_Sigmakw()
+     
+     

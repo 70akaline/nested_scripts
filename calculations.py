@@ -18,7 +18,7 @@ from copy import deepcopy
 from nested_scripts import *
 
 
-def nested_calculation( clusters, nested_struct_archive_name = None, flexible_Gweiss=False, sign=-1, sign_up_to=2, 
+def nested_calculation( clusters, nested_struct_archive_name = None, flexible_Gweiss=False, sign=-1, sign_up_to=2, use_Gweiss_causal_cautionary = False,
                         Us = [1.0],
                         Ts = [0.125], 
                         ns = [0.5], fixed_n = True,
@@ -203,8 +203,13 @@ def nested_calculation( clusters, nested_struct_archive_name = None, flexible_Gw
                               ),
                 generic_action(  name = "pre_impurity",
                     main = lambda data: nested_mains.pre_impurity(data),                       
-                    mixers = [], cautionaries = [lambda data,it: ph_symmetric_Gweiss_causal_cautionary( data, ntau=5000 ) ], allowed_errors = [0],        
-                    printout = lambda data, it: (data.dump_general( quantities = ['Gweiss_iw_unfit','Gweiss_iw','Delta_iw','Delta_iw_fit','Delta_tau','Delta_tau_fit'], suffix='-%s'%it ) )
+                    mixers = [], cautionaries = ([lambda data,it: ph_symmetric_Gweiss_causal_cautionary( data, ntau=5000 ) ]
+                                                 if use_Gweiss_causal_cautionary else []),
+                                 allowed_errors = ([0] if use_Gweiss_causal_cautionary else []),        
+                    printout = lambda data, it: ( (data.dump_general( quantities = ['Gweiss_iw_unfit','Gweiss_iw','Delta_iw','Delta_iw_fit','Delta_tau','Delta_tau_fit'], suffix='-%s'%it ) )
+                                                  if use_Gweiss_causal_cautionary else
+                                                  (data.dump_general( quantities = ['Gweiss_iw'], suffix='-current' ) ) 
+                                                )
                               ),
                 generic_action(  name = "impurity",
                     main = (lambda data: nested_mains.impurity(data, U, symmetrize_quantities = True, alpha=alpha, delta=delta, automatic_alpha_and_delta = automatic_alpha_and_delta, 

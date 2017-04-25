@@ -180,7 +180,9 @@ class IBZ:
         Q_new[i,j] = interpolation.bilinear( x , y, x1, x2, y1, y2, Q_old[i1,j1], Q_old[i1,j2], Q_old[i2,j1], Q_old[i2,j2])
 
   @staticmethod
-  def copy_by_symmetry(Q, nk):
+  def copy_by_symmetry(Q, nk=None): #nk doesn't do anything anymore
+    nk = len(Q[0,:])
+    assert len(Q[0,:])==len(Q[:,0]), "discretization must respect full lattice symmetry"
     assert nk%2 == 0, "copy_by_symmetry: nk must be even"
     for kxi in range(nk/2+1): 
       for kyi in range(kxi+1):
@@ -234,6 +236,47 @@ class IBZ:
           counter +=1
       xtcs.append(xs[-1])    
       return xs,ys, xtcs 
+
+  @staticmethod
+  def get_Qkw_on_long_path(Q, wi, only_positive = False, equidistant_checkpoints = False):
+      nk = len(Q[0,0,:])
+      #print nk
+      ks = numpy.linspace(0,2*pi,nk, endpoint=False)
+
+      dk = 2.0*pi/nk
+      dk_diag = math.sqrt(2.0)*dk if not equidistant_checkpoints else dk
+      #print ks
+      if only_positive:
+        shift = 0  
+      else:  
+        shift = len(Q[:,0,0])/2
+      
+      ys= []
+      xs= []           
+      path_covered = 0.0
+      
+      for i in range(nk/2):
+          ys.append(Q[shift+wi,i,i]) 
+          xs.append(path_covered)
+          path_covered += dk_diag
+    
+      for i in reversed(range(1,nk/2+1)):
+          ys.append(Q[shift+wi,i,nk/2])
+          xs.append(path_covered)
+          path_covered += dk
+
+      for i in range(nk/2):
+          ys.append(Q[shift+wi,i,nk/2-i])
+          xs.append(path_covered)
+          path_covered += dk_diag
+
+      for i in reversed(range(nk/2+1)):
+          ys.append(Q[shift+wi,i,0])
+          xs.append(path_covered)
+          path_covered += dk
+      xtcs=[xs[0],xs[nk/2],xs[nk],xs[3*nk/2],xs[-1]]    
+      xtcs_labels = [r"$(0,0)$",r"$(\pi,\pi)$",r"$(0,\pi)$",r"$(\pi,0)$",r"$(0,0)$"]
+      return xs,ys, xtcs, xtcs_labels
 
 
 ################################ DATA ##########################################
@@ -450,6 +493,7 @@ class non_local_data(basic_data):
     non_local_data.promote(self, n_k)
 
   def promote(self, n_k):
+    print "promoting non_local data. n_k: ", n_k
     self.n_k = n_k  
     self.ks = IBZ.k_grid(n_k)
     self.epsilonk = {}
@@ -680,7 +724,7 @@ class dca_data(local_data):
                      archive_name="dmft.out.h5"):
     basic_data.__init__(self, n_iw, beta, fermionic_struct, archive_name)
     local_data.promote(self, impurity_struct)
-    self.promote()
+    dca_data.promote(self)
 
   def promote(self):
     self.GweissK_iw = copy.deepcopy(self.G_loc_iw)
@@ -698,7 +742,45 @@ class dca_data(local_data):
     self.local_quantities.remove('G_loc_iw')
     self.local_quantities.extend(new_local) 
 
+#================================ DCA+ ===========================================================#
+class dca_plus_data(dca_data, non_local_data):
+  def __init__(self, n_k = 128,
+                     n_iw = 100,                     
+                     beta = 10.0, 
+                     impurity_struct = {'up': range(4)},
+                     fermionic_struct = {'0': [0],'1': [0],'2': [0],'3': [0]},
+                     archive_name="dmft.out.h5"):
+    dca_data.__init__(self, n_iw, beta, impurity_struct, fermionic_struct, archive_name)
+    non_local_data.__init__(self, n_iw, n_k, beta, {'up': [0]}, archive_name)
+    #self.non_local_struct = 
+    #self.fermionic_struct = self.non_local_struct #just temporarily
+    #non_local_data.promote(self, n_k)
+    #self.fermionic_struct = fermionic_struct #put it back...
+    dca_plus_data.promote(self)
+    print numpy.shape(self.Sigmakw['up'])
+    self.fermionic_struct = fermionic_struct #put it back...
 
-    
+  def promote(self):
+    self.mus = {'up': 0}
+    self.ns = {'up': 0}
+
+    self.Sigmaimpkw = copy.deepcopy(self.Sigmakw)
+    self.XiR_iw = copy.deepcopy(self.SigmaR_iw)
+    self.XiK_iw = copy.deepcopy(self.SigmaK_iw)
+    self.Xikw = copy.deepcopy(self.Sigmakw)
+
+    gs = []   
+    gs.append ( GfImFreq(indices = {'up': [0]}, beta = self.beta, n_points =self.n_iw, statistic = 'Fermion') )     
+    self.G_loc_iw = BlockGf(name_list = ['up'], block_list = gs, make_copies = True)
+
+    new_local = ['XiK_iw','XiR_iw']
+
+    self.local_fermionic_gfs.extend(new_local)    
+    self.local_quantities.extend(new_local) 
+
+    new_non_local = [ 'Xikw', 'Sigmaimpkw']
+    self.non_local_fermionic_gfs = new_non_local
+    self.non_local_quantities.extend( new_non_local )
+
 
 

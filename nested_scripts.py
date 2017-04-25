@@ -20,6 +20,7 @@ from impurity_solvers import solvers
 from calculations import *
 from cellular_calculation import *
 from dca_calculation import *
+from dca_plus_calculation import *
 from reverse_calculation import *
 
 if mpi.is_master_node():

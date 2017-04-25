@@ -90,6 +90,20 @@ def X_dwave(kx, ky, X):
   return X*(cos(kx)-cos(ky))
 
 ###############################################################################################################################################
+def full_decompose(Q):
+    nw,nk,nk = numpy.shape(Q)
+    ReQ, ImQ = numpy.real(Q), numpy.imag(Q)
+    ReQloc,ImQloc = numpy.sum(ReQ,axis=(1,2))/nk**2,numpy.sum(ImQ,axis=(1,2))/nk**2
+    ReQtilde = numpy.transpose(numpy.transpose(ReQ)[:,:,:]-ReQloc)
+    ImQtilde = numpy.transpose(numpy.transpose(ImQ)[:,:,:]-ImQloc)
+    return ReQ, ImQ, ReQloc, ImQloc, ReQtilde, ImQtilde
+
+def decompose(Q):
+    nw,nk,nk = numpy.shape(Q)
+    Qloc = numpy.sum(ReQ,axis=(1,2))
+    Qtilde = numpy.transpose(numpy.transpose(Q)[:,:,:]-Qloc)
+    return Qloc, Qtilde
+
 #---------------------------------------------------------------------------------------------------------------------------------------------#
 def total_inverse_FT(Qkw,
                      beta, ntau, n_iw, n_k,
@@ -362,7 +376,14 @@ def full_fill_SigmaK_iw_from_SigmaR_iw(SigmaK_iw, SigmaR_iw, P, Pinv):
   
 def full_fill_GweissK_iw_from_Dyson(GweissK_iw, GK_iw, SigmaK_iw):
   for K,g0 in GweissK_iw:
+    #print K
+    #nw = len(GK_iw[K].data[:,0,0])
+    #print "GK_iw[K].data[nw/2,0,0]:",GK_iw[K].data[nw/2,0,0]
+    #print "SigmaK_iw[K].data[nw/2,0,0]:",SigmaK_iw[K].data[nw/2,0,0]
+    #try:  
     g0 << inverse(inverse(GK_iw[K]) + SigmaK_iw[K])
+    #except:
+    #  pass
 
 def full_fill_GweissR_iw_from_GweissK_iw(GweissR_iw, GweissK_iw, P, Pinv, l_list = []):
   if mpi.is_master_node(): print "full_fill_GweissR_iw_from_GweissK_iw"
@@ -407,6 +428,91 @@ def get_Sigmakw_from_SigmaK_iw(SigmaK_iw, dca_scheme, nk=64):
             Sigmakw[:,kxi,kyi] = SigmaK_iw['%02d'%min_l].data[:,0,0]   
 
     return Sigmakw, ks  
+
+#-----------------------------------------------------------------------------------------------------------------------------------------------#
+#                                        dca_plus specific
+#-----------------------------------------------------------------------------------------------------------------------------------------------#
+
+def fill_XiK_from_SigmaK(XiK_iw,SigmaK_iw, alpha=1):
+    assert alpha > 0.0, 'alpha must be positive'
+    XiK_iw << inverse(SigmaK_iw - 1j*alpha)
+
+def blockwise_Sigmak_from_Xik(Sigmakw, Xikw, alpha=1):
+    assert alpha > 0.0, 'alpha must be positive'
+    Sigmakw[:,:,:] = Xikw[:,:,:]**(-1) + 1j*alpha
+    
+def IBZ_convolution(Q, nK):
+    nw = len(Q[:,0,0])
+    nk = len(Q[0,:,0])    
+    assert len(Q[0,:,0])==len(Q[0,0,:]), "must be nkx=nky"
+    assert nk % nK ==0, "must be divisible with the coarse graining"
+    if (nk/nK) % 2 == 0:
+        n_k_in_K = nk/nK        
+        D = n_k_in_K/2    
+        #print "n_k_in_K: ", n_k_in_K
+        #print "D: ", D        
+        Qp = deepcopy(Q)    
+        Qp[:,:,:] = 0.0
+        Qlarge = numpy.zeros((nw,3*nk,3*nk))
+        for i in range(3):
+            for j in range(3):
+                Qlarge[:,i*nk:(i+1)*nk,j*nk:(j+1)*nk] = Q[:,:,:]
+        for kxi in range(nk):
+            for kyi in range(nk):                            
+                lxi =kxi+nk
+                lyi =kyi+nk
+                for shftx in [0,1]:
+                    for shfty in [0,1]:
+                        Qp[:,kxi,kyi] += numpy.sum(Qlarge[:,lxi-D+shftx:lxi+D+shftx,lyi-D+shfty:lyi+D+shfty],axis=(1,2))
+                Qp[:,kxi,kyi] *= 0.25   
+
+        return Qp/n_k_in_K**2
+    else:
+        n_k_in_K = nk/nK        
+        D = (n_k_in_K-1)/2    
+        #print "n_k_in_K: ", n_k_in_K
+        #print "D: ", D        
+        Qp = deepcopy(Q)    
+        Qp[:,:,:] = 0.0
+        Qlarge = numpy.zeros((nw,3*nk,3*nk))
+        for i in range(3):
+            for j in range(3):
+                Qlarge[:,i*nk:(i+1)*nk,j*nk:(j+1)*nk] = Q[:,:,:]
+        for kxi in range(nk):
+            for kyi in range(nk):                            
+                lxi =kxi+nk
+                lyi =kyi+nk
+                Qp[:,kxi,kyi] += numpy.sum(Qlarge[:,lxi-D:lxi+D+1,lyi-D:lyi+D+1],axis=(1,2))
+        return Qp/n_k_in_K**2
+   
+from data_containers import IBZ
+def Richardson_Lucy(Qtarget, Q, nK, n_iterations = 5, accr=1e-5):
+    print "----------- Richardson Lucy --------------"
+    nk = len(Q[0,:,0])
+    ReQ, ImQ, ReQloc, ImQloc, ReQtilde, ImQtilde = full_decompose(Q)
+    ReQt, ImQt, ReQtloc, ImQtloc, ReQttilde, ImQttilde = full_decompose(Qtarget)
+        
+    for q, qt in [(ReQ, ReQt), (ImQ,ImQt)]:        
+        print "----------- Doing %s part"%("real" if q is ReQ else "imag")  
+        for it in range(n_iterations):
+            print "------ it: ",it
+            Qp = IBZ_convolution(q, nK)
+            if numpy.amin(numpy.abs(Qp))<1e-12:
+              print "encountering zero!"
+              break
+            Qw = qt/Qp
+            Qpp = IBZ_convolution(Qw, nK)
+            q *= Qpp
+            IBZ.copy_by_symmetry(numpy.transpose(q)[:,:,:])
+            diff = numpy.linalg.norm(IBZ_convolution(q, nK)-qt)/numpy.linalg.norm(qt)            
+            print "diff: ", diff
+            if diff < accr: 
+              print "----converged!"
+              break             
+  
+    Q[:,:,:] = ReQ+1j*ImQ
+    Qloc = numpy.sum(Q,axis=(1,2))/nk**2
+    numpy.transpose(Q)[:,:,:] += ReQtloc + 1j*ImQtloc - Qloc #enforce the correct local part
 
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------#

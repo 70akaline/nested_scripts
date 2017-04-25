@@ -9,6 +9,8 @@ import numpy as np
 import numpy.linalg
 from scipy.spatial import Voronoi
 
+from data_containers import IBZ
+
 class dca_struct:
     def __init__(self, n1,m1,n2,m2, TB):
         self.n1 = n1
@@ -163,6 +165,139 @@ class dca_struct:
 
         Pinv = np.linalg.inv(P)
         return P, Pinv
+
+    def get_QK_from_QR(self, QK_iw, QR_iw):
+      QK_iw.zero()
+      dim = self.dim
+      P, Pinv = self.P, self.Pinv
+      for i in range(dim):
+        for l in range(dim):
+          QK_iw["%02d"%i] += dim * Pinv[i,0] * QR_iw["%02d"%l] * P[l,i]
+
+    def get_QR_from_QK(self, QR_iw, QK_iw, l_list = []):
+      QR_iw.zero()
+      dim = self.dim
+      P, Pinv = self.P, self.Pinv
+      for l in (range(dim) if l_list==[] else l_list):
+        for i in range(dim):
+          QR_iw["%02d"%l] += P[0,i] * QK_iw["%02d"%i] * Pinv[i,l]
+
+    def get_independent_r_point_groups(self):
+        assert self.m1==0 and self.n2==0, 'inapplicable to general clusters'
+        n1,m2 = self.n1,self.m2
+        
+        indep_r_groups = []
+        for rp in self.r_points:
+            if rp[0]>n1/2 or rp[1]>m2/2 or rp[1]>rp[0]: continue
+            indep_r_groups.append([])
+            for l in range(n1*m2):
+                p = self.r_points[l,:].copy()
+                if p[0]>n1/2: p[0]=n1-p[0]
+                if p[1]>m2/2: p[1]=m2-p[1]
+                if p[1]>p[0]: p[0], p[1] = p[1], p[0]
+                if p[0] == rp[0] and p[1] == rp[1]:
+                    indep_r_groups[-1].append(l)
+        return indep_r_groups    
+
+    def symmetrize_QR(self, QR):
+        irs = self.get_independent_r_point_groups()
+        for ir in irs:
+            tot = 0.0
+            for l in ir:
+                tot += QR["%.2d"%l].data[:,:,:]
+            tot/=len(ir)
+            for l in ir:
+                QR["%.2d"%l].data[:,:,:] = tot
+
+    def get_Qk_from_QR_embedded(self, Qkw, QR_iw, ks):
+        assert self.m1==0 and self.n2==0, 'inapplicable to general clusters'
+        n1,m2 = self.n1,self.m2
+        r_points = self.r_points
+        indep_r_groups = self.get_independent_r_point_groups()
+        Qkw[:,:,:] = 0.0
+        for rg in indep_r_groups:
+            key = "%.2d"%rg[0]
+            r = r_points[rg[0]]
+            rx,ry = r[0],r[1]
+            #print key, r, rx,ry
+            if rx == 0 and ry == 0:
+                numpy.transpose(Qkw)[:,:,:] += QR_iw[key].data[:,0,0]
+                continue
+            pref = lambda kx,ky: 0
+            for x in ([rx,-rx] if rx!=0 else [0]):
+                for y in ([ry,-ry] if ry!=0 else [0]):
+                    #print x,y
+                    pref = lambda kx,ky,pref=pref,x=x,y=y: pref(kx,ky) + numpy.exp(-1j*(kx*x+ky*y))
+                    if rx!=ry: 
+                        pref = lambda kx,ky,pref=pref,x=x,y=y: pref(kx,ky) + numpy.exp(-1j*(kx*y+ky*x))
+                        #print y,x       
+            for kxi, kx in enumerate(ks):
+                for kyi, ky in enumerate(ks):
+                    Qkw[:,kxi,kyi] += pref(kx,ky)*QR_iw[key].data[:,0,0]                    
+
+    def get_Qk_from_QR(self, Qkw, QR_iw, ks, symmetrize = True):
+        assert self.m1==0 and self.n2==0, 'inapplicable to general clusters'
+        n1,m2 = self.n1,self.m2
+        r_points = self.r_points
+        Qkw[:,:,:] = 0.0    
+        for l, r in enumerate(r_points):
+            key = "%.2d"%l
+            rx,ry = r[0],r[1]
+            #print l, r, rx,ry        
+            if rx>n1/2: rx=rx-n1
+            if ry>m2/2: ry=ry-m2
+            #print "after:", rx,ry                
+            pref = lambda kx,ky: 0
+            for sgnx in [1,-1]:
+                for sgny in [1,-1]:
+                    for flip in [True,False]:
+                        if flip:
+                            pref = lambda kx,ky, pref=pref, sgnx=sgnx, sgny=sgny: pref(kx,ky) + (numpy.exp(-1j*(sgnx*ky*rx+sgny*kx*ry)))
+                        else:
+                            pref = lambda kx,ky, pref=pref, sgnx=sgnx, sgny=sgny: pref(kx,ky) + (numpy.exp(-1j*(sgnx*kx*rx+sgny*ky*ry)))
+            pref = lambda kx,ky, pref=pref: 0.125*pref(kx,ky)        
+            for kxi, kx in enumerate(ks):
+                for kyi, ky in enumerate(ks):
+                    Qkw[:,kxi,kyi] += pref(kx,ky)*QR_iw[key].data[:,0,0]
+        
+
+    def QK_iw_to_QKw(self, QKw, QK_iw):           
+        assert self.m1==0 and self.n2==0, 'inapplicable to general clusters'
+        assert self.n1==self.m2, 'must be'
+        nK = self.n1
+        for l in range(self.dim):
+            QKw[:,l/nK,l%nK] = QK_iw["%.2d"%l].data[:,0,0]
+            
+    def QKw_to_QK_iw(self, QK_iw, QKw):    
+        assert self.m1==0 and self.n2==0, 'inapplicable to general clusters'
+        assert self.n1==self.m2, 'must be'
+        nK = self.n1
+        for l in range(self.dim):
+            QK_iw["%.2d"%l].data[:,0,0] = QKw[:,l/nK,l%nK]
+
+    def Qkw_to_QK_iw(self, QK_iw, Qkw):    
+        print "Qkw_to_QK_iw"
+        nk = len(Qkw[0,:,0])
+        assert self.m1==0 and self.n2==0, 'inapplicable to general clusters'
+        assert self.n1==self.m2, 'must be'
+        nK = self.n1
+        assert nk % nK == 0, "has to be divisible by nK"
+        D = nk/nK    
+        for l in range(self.dim):  
+            #print "filling K: ", l        
+            QK_iw["%.2d"%l].data[:,0,0] = Qkw[:,(l/nK)*D,(l%nK)*D]
+
+    def Qrw_to_QR_iw(self, QR_iw, Qrw):    
+        assert self.m1==0 and self.n2==0, 'inapplicable to general clusters'
+        n1,m2 = self.n1,self.m2
+        nk = len(Qrw[0,:,0])
+        for l, r in enumerate(self.r_points):
+          rx,ry = r[0],r[1]
+          #print "l, r, rx,ry: ",l,r,rx,ry  
+          if rx>n1/2: rx=rx-n1
+          if ry>m2/2: ry=ry-m2
+          #print "after:", rx,ry    
+          QR_iw["%.2d"%l].data[:,0,0] = Qrw[:,rx,ry]
 
     def get_impurity_struct(self):
         return {'x': range(self.dim)}
