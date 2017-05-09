@@ -12,6 +12,7 @@ from copy import deepcopy
 from tail_fitters import symmetrize_blockgf
 
 def impose_real_valued_in_imtime_numpy(Q):
+  print "impose_real_valued_in_imtime_numpy"
   Q[:,:,:] += numpy.conjugate(Q[::-1,:,:])
   Q /= 2.0
 

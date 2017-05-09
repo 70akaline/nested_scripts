@@ -3,6 +3,7 @@ from data_containers import cumul_nested_data
 from data_containers import cellular_data
 from data_containers import dca_data
 from data_containers import dca_plus_data
+from action_cautionaries import impose_real_valued_in_imtime_numpy
 from getters import *
 from impurity_solvers import solvers
 
@@ -122,12 +123,15 @@ def prepare_dca_plus( data, dca_scheme, solver_class = solvers.ctint, alpha = 1,
 
   data.get_XiK = lambda: fill_XiK_from_SigmaK(data.XiK_iw, data.SigmaK_iw, alpha)
   data.get_XiR = lambda: dca_scheme.get_QR_from_QK(data.XiR_iw, data.XiK_iw)
+
   if not embedded:
     data.get_Xik = lambda: dca_scheme.get_Qk_from_QR(data.Xikw['up'], data.XiR_iw, data.ks)
-    data.get_Sigmaimpk = lambda: blockwise_Sigmak_from_Xik(data.Sigmaimpkw['up'], data.Xikw['up'], alpha)
+    data.get_Sigmaimpk = lambda: [ blockwise_Sigmak_from_Xik(data.Sigmaimpkw['up'], data.Xikw['up'], alpha),
+                                   impose_real_valued_in_imtime_numpy(data.Sigmaimpkw['up'][:,:,:]) ]
     if not no_convolution:
       data.get_Sigmakw = lambda: [ numpy.copyto(data.Sigmakw['up'], data.Sigmaimpkw['up']),
-                                   Richardson_Lucy(data.Sigmaimpkw['up'], data.Sigmakw['up'], nK, n_iterations = n_RL_iterations) ]
+                                   Richardson_Lucy(data.Sigmaimpkw['up'], data.Sigmakw['up'], nK, n_iterations = n_RL_iterations),
+                                   impose_real_valued_in_imtime_numpy(data.Sigmakw['up'][:,:,:]) ]
     else:
       data.get_Sigmakw = lambda: numpy.copyto(data.Sigmakw['up'], data.Sigmaimpkw['up']) 
 

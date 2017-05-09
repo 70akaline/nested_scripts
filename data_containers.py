@@ -234,8 +234,9 @@ class IBZ:
           ys.append(Q[shift+wi,i,i]) 
           xs.append(2.0*math.pi+counter*math.sqrt(2.0)*math.pi/(nk/2.0))
           counter +=1
-      xtcs.append(xs[-1])    
-      return xs,ys, xtcs 
+      xtcs.append(xs[-1]) 
+      #xtcs_labels = [r"$(0,0)$",r"$(0,\pi)$",r"$(\pi,\pi)$",r"$(0,0)$"]   
+      return xs,ys, xtcs#, xtcs_labels 
 
   @staticmethod
   def get_Qkw_on_long_path(Q, wi, only_positive = False, equidistant_checkpoints = False):
