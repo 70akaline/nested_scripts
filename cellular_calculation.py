@@ -20,6 +20,7 @@ from nested_structure import get_identical_pair_sets
 
 
 def cellular_calculation( Lx=2, Ly=1, periodized = False,
+                          triangluar = False, 
                           Us = [1.0],
                           Ts = [0.125], 
                           ns = [0.5], fixed_n = True,
@@ -144,7 +145,12 @@ def cellular_calculation( Lx=2, Ly=1, periodized = False,
         for kyi in range(dt.n_k):
           dt.epsilonijk[key][:,:,kxi,kyi] = dispersion(dt.ks[kxi], dt.ks[kyi])
 
-    prepare_cellular( dt, Lx, Ly, solver_class, periodized )
+    if not triangular:
+      prepare_cellular( dt, Lx, Ly, solver_class, periodized )
+      identical pairs = {dt.impurity_struct.keys()[0]: get_identical_pair_sets(Lx,Ly)}
+    else: 
+      prepare_cellular_triangular( dt, Lx, Ly, solver_class, periodized )
+      identical pairs = {dt.impurity_struct.keys()[0]: triangular_identical_pair_sets(Lx,Ly)}
     
     solver_class.initialize_solvers( dt, solver_data_package )
  
@@ -183,7 +189,7 @@ def cellular_calculation( Lx=2, Ly=1, periodized = False,
                            if (not use_cthyb) else
                            (lambda data: nested_mains.impurity_cthyb(data, U, symmetrize_quantities = True, n_cycles=n_cycles, max_times = max_times, solver_data_package = solver_data_package )),
                     mixers = [], cautionaries = [lambda data,it: local_nan_cautionary(data, data.impurity_struct, Qs = ['Sigma_imp_iw'], raise_exception = True),
-                                                 lambda data,it: symmetrize_cluster_impurity(data.Sigma_imp_iw, {dt.impurity_struct.keys()[0]: get_identical_pair_sets(Lx,Ly)})], allowed_errors = [1],    
+                                                 lambda data,it: symmetrize_cluster_impurity(data.Sigma_imp_iw, identical_pairs)], allowed_errors = [1],    
                     printout = lambda data, it: ( [ data.dump_general( quantities = ['Sigma_imp_iw','G_imp_iw'], suffix='-current' ),
                                                     data.dump_solvers(suffix='-current')
                                                   ] if ((it+1) % print_current==0) else None)  ) ]

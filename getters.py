@@ -700,3 +700,148 @@ def matrix_dispersion(Nc, t,tp, kx, ky):
     return numpy.array(A) + numpy.array(B) + numpy.array(C)
   else:
     assert False, "not yet implemented"
+
+#-----------------------------------------------------------------------------------------------------------------------------------------------#
+#                                        triangular specific
+#-----------------------------------------------------------------------------------------------------------------------------------------------#
+
+def triangular_identical_pair_sets(Lx,Ly):
+  if Lx==2 and Ly==2: #this is not true symmetry of the cluster. deviations are expected. in the periodized scheme, this is how we're doing it. it's a bit ad hoc. do nested.
+    return [ [ [0,0],[1,1],[2,2],[3,3] ],
+             [ [0,1],[1,0],[0,2],[2,0],[1,2],[2,1],[2,3],[3,2],[1,3],[3,1] ],
+             [ [0,3],[3,0] ]
+           ]
+  elif Lx==2 and Ly==1: 
+    return [ [ [0,0],[1,1] ],
+             [ [0,1],[1,0] ] 
+           ]
+  else: 
+    assert False, "not implemented!"
+
+def triangular_cellular_latt_to_imp_mapping(x,y,nk,Lx,Ly): 
+  if Lx==2 and Ly==2: 
+    X,Y = x,y
+    if X>nk/2+1: X -= nk
+    if Y>nk/2+1: Y -= nk
+    if (abs(X)>=Lx) or (abs(Y)>=Ly): return None   
+    i = 0
+    if X<0: i=abs(X)
+    if Y<0: i += Lx*abs(Y)  
+    j = i+ Lx*Y + X
+    return [i,j]
+  elif Lx==2 and Ly==1: 
+    if [x,y] in [[0,0]]:
+      return [0,0]
+    elif [x,y] in [ [0,1],[1,0],[nk-1,1],[1,nk-1],[0,nk-1],[nk-1,0] ]:
+      return [0,1] 
+
+def triangular_full_fill_Sigmaijkw_periodized(Sigmaijkw, Sigma_imp_iw, ks):
+    if mpi.is_master_node(): print "full_fill_Sigmaijkw_periodized"
+    assert len(Sigmaijkw.keys())==1, "must be only one block in Sigmaijkw"
+    impkeys = [name for name,g in Sigma_imp_iw]    
+    assert len(impkeys)==1, "must be only one block in Sigma_imp_iw"      
+    impkey = impkeys[0]
+    numpy.transpose(Sigmaijkw[Sigmaijkw.keys()[0]])[:,:,:] = numpy.transpose(Sigma_imp_iw[impkey].data)[:,:,:]    
+
+    if Nc==2:
+      s = Sigma_imp_iw[impkey].data[:,0,1]
+      z = deepcopy(s)
+      z[:] = 0    
+      for kxi, kx in enumerate(ks):
+        for kyi, ky in enumerate(ks):
+          sk = s*(cos(kx+ky)+exp(1j*(ky-kx)))
+          csk = numpy.conj(sk)
+
+          B =       [[z,    skx  ],
+                     [cskx, z    ]]
+          skAA = s*cos(ky)
+          skBB = skAA
+
+          C =       [[skAA,  z   ],
+                     [z,     skBB]]
+
+          BC = numpy.array(B)+numpy.array(C)
+          numpy.transpose(Sigmaijkw[Sigmaijkw.keys()[0]])[kyi,kxi,:,:,:] += BC
+
+    elif Nc==4:   
+      s = Sigma_imp_iw[impkey].data[:,0,1]
+      sp = Sigma_imp_iw[impkey].data[:,0,3]    
+      z = deepcopy(s)
+      z[:] = 0    
+      for kxi, kx in enumerate(ks):
+        for kyi, ky in enumerate(ks):
+          skx = s*exp(1j*kx)
+          sky = s*exp(1j*ky)
+          cskx = s*exp(-1j*kx)
+          csky = s*exp(-1j*ky)
+
+          B =       [[z,    skx,  sky,  z  ],
+                     [cskx, z,    z,    sky],
+                     [csky, z,    z,    skx],
+                     [z,    csky, cskx, z  ]]
+          spkAD = sp*numpy.conj(  exp(-1j*kx)+exp(-1j*ky) + exp(-1j*(kx+ky))  )
+          spkDA = sp*(  exp(-1j*kx)+exp(-1j*ky) + exp(-1j*(kx+ky))  )
+          skBC = s*numpy.conj(  exp(1j*kx)+exp(-1j*ky) + exp(1j*(kx-ky))  )
+          skCB = s*(  exp(1j*kx)+exp(-1j*ky) + exp(1j*(kx-ky))  )
+
+          C =       [[z,     z,     z,     spkAD ],
+                     [z,     z,     skBC,  z     ],
+                     [z,     skCB,  z,     z     ],
+                     [spkDA, z,     z,     z     ]]
+
+          BC = numpy.array(B)+numpy.array(C)
+          numpy.transpose(Sigmaijkw[Sigmaijkw.keys()[0]])[kyi,kxi,:,:,:] += BC
+
+def triangular_matrix_dispersion(Nc, t, kx, ky):
+  if Nc==2:
+    #  ABAB   \ky /kx
+    #  BABA    \ /
+    #  ABAB     V
+    A =       [[0,t],
+               [t,0]]
+
+    tk = t*(exp(1j*(ky-kx))+2.0*cos(kx+ky))
+
+    B =       [[0,             tk],
+               [numpy.conj(tk),0 ]]
+
+    tpk = t*cos(ky)
+
+    C =       [[tpk,0],
+               [0, tpk]]
+
+    return numpy.array(A) + numpy.array(B) + numpy.array(C)
+  elif Nc==4:
+    #  CD-CD-CD   <----o
+    #  AB-AB-AB   X    |
+    #  ||X||X||        | 
+    #  CD-CD-CD        |
+    #  AB-AB-AB        v Y
+    A =       [[0,  t,  t,  0],
+               [t,  0,  t,  t ],
+               [t,  t,  0,  t ],
+               [0,  t,  t,  0 ]]
+
+    tkx = t*exp(-1j*kx)
+    tky = t*exp(-1j*ky)
+    ctkx = t*exp(1j*kx)
+    ctky = t*exp(1j*ky)
+
+    B =       [[0,    tkx,  tky,  0  ],
+               [ctkx, 0,    0,    tky],
+               [ctky, 0,    0,    tkx],
+               [0,    ctky, ctkx, 0  ]]
+
+    tpkAD = tp*(  exp(-1j*kx)+exp(-1j*ky) + exp(-1j*(kx+ky))  )
+    #tpkBC = tp*(  exp(1j*kx)+exp(-1j*ky) + exp(1j*(kx-ky))  )
+    tpkDA = numpy.conj(tpkAD)
+    #tpkCB = numpy.conj(tpkBC)
+
+    C =       [[0,     0,     0,     tpkAD ],
+               [0,     0,     0,     0     ],
+               [0,     0,     0,     0     ],
+               [tpkDA, 0,     0,     0     ]]
+
+    return numpy.array(A) + numpy.array(B) + numpy.array(C)
+  else:
+    assert False, "not yet implemented"

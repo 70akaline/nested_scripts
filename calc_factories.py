@@ -197,3 +197,16 @@ def prepare_cellular( data, Lx, Ly, solver_class = solvers.ctint, periodized = F
 
   data.dump_solvers = lambda suffix: [solver_class.dump( data.solvers[C], data.archive_name, suffix='-%s%s'%(C,suffix) ) for C in data.impurity_struct.keys()]
 
+#----------------------------- triangular celullar -----------------------------------------------------------------------#
+
+def prepare_cellular_triangular( data, Lx, Ly, solver_class = solvers.ctint, periodized = False  ):
+  prepare_cellular( data, Lx, Ly, solver_class, periodized )  
+
+  if periodized:
+    data.get_Sigmaijkw = lambda: triangular_full_fill_Sigmaijkw_periodized(data.Sigmaijkw, data.Sigma_imp_iw, data.ks)
+  else:
+    data.get_Sigmaijkw = lambda: triangular_full_fill_Sigmaijkw(data.Sigmaijkw, data.Sigma_imp_iw)
+  
+  data.periodize_cumul = lambda: None
+  data.periodize_selfenergy = lambda: triangular_periodize_selfenergy(data.Gkw, data.Sigmakw, data.Sigmaijw, data.iws, data.mus, data.epsilonk, data.Sigma_imp_iw, Lx, Ly)
+
