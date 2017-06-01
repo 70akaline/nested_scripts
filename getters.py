@@ -89,6 +89,12 @@ def Jq_square_AFM(qx, qy, J): #should not make any difference when summed over t
 def X_dwave(kx, ky, X):
   return X*(cos(kx)-cos(ky))
 
+def triangular_on_a_square(t,kx,ky):
+    return 2.0*t*(cos(kx)+cos(ky)+cos(kx+ky))
+
+def triangular(t,kx,ky):
+    return 2.0*t*cos(kx)+4.0*t*cos(kx/2.0)*cos(ky*sqrt(3.0)/2.0)
+
 ###############################################################################################################################################
 def full_decompose(Q):
     nw,nk,nk = numpy.shape(Q)
@@ -629,7 +635,7 @@ def periodize_cumul(Gkw, Sigmakw, gkw, gijw, g_imp_iw, iws, mus, epsilonk, Sigma
   full_fill_Sigmakw_from_gkw(Sigmakw, numpy.array(iws).imag, mus['up'], gkw)
   full_fill_Gkw_from_epsiolonk_and_gkw(Gkw, epsilonk, gkw)
 
-def periodize_selfenergy(Gkw, Sigmakw, Sigmaijw, iws, mus, epsilonk, Sigma_imp_iw, Lx, Ly):  
+def periodize_selfenergy(Gkw, Sigmakw, Sigmaijw, iws, mus, epsilonk, Sigma_imp_iw, Lx, Ly, mapping = cellular_latt_to_imp_mapping):  
   if mpi.is_master_node(): print "periodize_selfenergy"
   imp_key = [name for name,g in Sigma_imp_iw ][0] 
   Nc = len(Sigma_imp_iw[imp_key].data[0,0,:])
@@ -637,7 +643,7 @@ def periodize_selfenergy(Gkw, Sigmakw, Sigmaijw, iws, mus, epsilonk, Sigma_imp_i
   for U in Sigmaijw.keys():
     for x in range(nk):
       for y in range(nk):
-        ij = cellular_latt_to_imp_mapping(x,y,nk,Lx,Ly)
+        ij = mapping(x,y,nk,Lx,Ly)
         if ij is None:
           Sigmaijw[U][:,x,y] = 0.0
         else:
@@ -706,9 +712,10 @@ def matrix_dispersion(Nc, t,tp, kx, ky):
 #-----------------------------------------------------------------------------------------------------------------------------------------------#
 
 def triangular_identical_pair_sets(Lx,Ly):
-  if Lx==2 and Ly==2: #this is not true symmetry of the cluster. deviations are expected. in the periodized scheme, this is how we're doing it. it's a bit ad hoc. do nested.
+  if Lx==2 and Ly==2: 
     return [ [ [0,0],[1,1],[2,2],[3,3] ],
-             [ [0,1],[1,0],[0,2],[2,0],[1,2],[2,1],[2,3],[3,2],[1,3],[3,1] ],
+             [ [0,1],[1,0],[0,2],[2,0],[2,3],[3,2],[1,3],[3,1] ],
+             [ [1,2],[2,1] ],
              [ [0,3],[3,0] ]
            ]
   elif Lx==2 and Ly==1: 
@@ -736,35 +743,35 @@ def triangular_cellular_latt_to_imp_mapping(x,y,nk,Lx,Ly):
       return [0,1] 
 
 def triangular_full_fill_Sigmaijkw_periodized(Sigmaijkw, Sigma_imp_iw, ks):
-    if mpi.is_master_node(): print "full_fill_Sigmaijkw_periodized"
+    if mpi.is_master_node(): print "triangular_full_fill_Sigmaijkw_periodized"
     assert len(Sigmaijkw.keys())==1, "must be only one block in Sigmaijkw"
     impkeys = [name for name,g in Sigma_imp_iw]    
     assert len(impkeys)==1, "must be only one block in Sigma_imp_iw"      
     impkey = impkeys[0]
     numpy.transpose(Sigmaijkw[Sigmaijkw.keys()[0]])[:,:,:] = numpy.transpose(Sigma_imp_iw[impkey].data)[:,:,:]    
-
+    Nc = numpy.shape(Sigmaijkw[Sigmaijkw.keys()[0]])[1]
+    if mpi.is_master_node(): print "Nc =",Nc
     if Nc==2:
       s = Sigma_imp_iw[impkey].data[:,0,1]
       z = deepcopy(s)
       z[:] = 0    
       for kxi, kx in enumerate(ks):
         for kyi, ky in enumerate(ks):
-          sk = s*(cos(kx+ky)+exp(1j*(ky-kx)))
-          csk = numpy.conj(sk)
+          skAB = s*(exp(1j*(ky-kx))+exp(-1j*kx)+exp(1j*ky))
+          skBA = numpy.conj(skAB)
 
-          B =       [[z,    skx  ],
-                     [cskx, z    ]]
           skAA = s*cos(ky)
           skBB = skAA
 
-          C =       [[skAA,  z   ],
-                     [z,     skBB]]
+          B =       [[skAA,  skAB],
+                     [skBA,  skBB]]
 
-          BC = numpy.array(B)+numpy.array(C)
-          numpy.transpose(Sigmaijkw[Sigmaijkw.keys()[0]])[kyi,kxi,:,:,:] += BC
+          B = numpy.array(B)
+          numpy.transpose(Sigmaijkw[Sigmaijkw.keys()[0]])[kyi,kxi,:,:,:] += B
 
-    elif Nc==4:   
-      s = Sigma_imp_iw[impkey].data[:,0,1]
+    elif Nc==4:  
+      ipss = triangular_identical_pair_sets(Lx,Ly) 
+      s = (4*Sigma_imp_iw[impkey].data[:,0,1]+Sigma_imp_iw[impkey].data[:,1,2])/5.0
       sp = Sigma_imp_iw[impkey].data[:,0,3]    
       z = deepcopy(s)
       z[:] = 0    
@@ -800,17 +807,13 @@ def triangular_matrix_dispersion(Nc, t, kx, ky):
     A =       [[0,t],
                [t,0]]
 
-    tk = t*(exp(1j*(ky-kx))+2.0*cos(kx+ky))
+    tkAB = t*(exp(1j*(ky-kx))+exp(-1j*kx)+exp(1j*ky))
+    tkBA = numpy.conj(tkAB)  
+    tkAA = tkBB = t*cos(ky)
+    B =       [[tkAA, tkAB],
+               [tkBA, tkBB]]
 
-    B =       [[0,             tk],
-               [numpy.conj(tk),0 ]]
-
-    tpk = t*cos(ky)
-
-    C =       [[tpk,0],
-               [0, tpk]]
-
-    return numpy.array(A) + numpy.array(B) + numpy.array(C)
+    return numpy.array(A) + numpy.array(B)
   elif Nc==4:
     #  CD-CD-CD   <----o
     #  AB-AB-AB   X    |
@@ -832,14 +835,14 @@ def triangular_matrix_dispersion(Nc, t, kx, ky):
                [ctky, 0,    0,    tkx],
                [0,    ctky, ctkx, 0  ]]
 
-    tpkAD = tp*(  exp(-1j*kx)+exp(-1j*ky) + exp(-1j*(kx+ky))  )
-    #tpkBC = tp*(  exp(1j*kx)+exp(-1j*ky) + exp(1j*(kx-ky))  )
+    tpkAD = tp*(  exp(-1j*kx)+exp(-1j*ky)  )
+    tpkBC = tp*(  exp(-1j*(kx+ky))  )
     tpkDA = numpy.conj(tpkAD)
-    #tpkCB = numpy.conj(tpkBC)
+    tpkCB = numpy.conj(tpkBC)
 
     C =       [[0,     0,     0,     tpkAD ],
-               [0,     0,     0,     0     ],
-               [0,     0,     0,     0     ],
+               [0,     0,     tpkBC, 0     ],
+               [0,     tpkCB, 0,     0     ],
                [tpkDA, 0,     0,     0     ]]
 
     return numpy.array(A) + numpy.array(B) + numpy.array(C)

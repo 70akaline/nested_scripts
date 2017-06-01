@@ -204,9 +204,9 @@ def prepare_cellular_triangular( data, Lx, Ly, solver_class = solvers.ctint, per
 
   if periodized:
     data.get_Sigmaijkw = lambda: triangular_full_fill_Sigmaijkw_periodized(data.Sigmaijkw, data.Sigma_imp_iw, data.ks)
-  else:
-    data.get_Sigmaijkw = lambda: triangular_full_fill_Sigmaijkw(data.Sigmaijkw, data.Sigma_imp_iw)
   
   data.periodize_cumul = lambda: None
-  data.periodize_selfenergy = lambda: triangular_periodize_selfenergy(data.Gkw, data.Sigmakw, data.Sigmaijw, data.iws, data.mus, data.epsilonk, data.Sigma_imp_iw, Lx, Ly)
+  data.periodize_selfenergy = lambda: periodize_selfenergy(data.Gkw, data.Sigmakw, data.Sigmaijw, 
+                                                           data.iws, data.mus, data.epsilonk, data.Sigma_imp_iw, 
+                                                           Lx, Ly, mapping=triangular_cellular_latt_to_imp_mapping)
 

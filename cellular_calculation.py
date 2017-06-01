@@ -147,10 +147,10 @@ def cellular_calculation( Lx=2, Ly=1, periodized = False,
 
     if not triangular:
       prepare_cellular( dt, Lx, Ly, solver_class, periodized )
-      identical pairs = {dt.impurity_struct.keys()[0]: get_identical_pair_sets(Lx,Ly)}
+      identical_pairs = {dt.impurity_struct.keys()[0]: get_identical_pair_sets(Lx,Ly)}
     else: 
       prepare_cellular_triangular( dt, Lx, Ly, solver_class, periodized )
-      identical pairs = {dt.impurity_struct.keys()[0]: triangular_identical_pair_sets(Lx,Ly)}
+      identical_pairs = {dt.impurity_struct.keys()[0]: triangular_identical_pair_sets(Lx,Ly)}
     
     solver_class.initialize_solvers( dt, solver_data_package )
  
