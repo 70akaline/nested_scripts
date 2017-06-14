@@ -183,20 +183,22 @@ class dca_struct:
         return P, Pinv
 
     def get_QK_from_QR(self, QK_iw, QR_iw):
+      r0 = self.get_r0()
       QK_iw.zero()
       dim = self.dim
       P, Pinv = self.P, self.Pinv
       for i in range(dim):
         for l in range(dim):
-          QK_iw["%02d"%i] += dim * Pinv[i,0] * QR_iw["%02d"%l] * P[l,i]
+          QK_iw["%02d"%i] += dim * Pinv[i,r0] * QR_iw["%02d"%l] * P[l,i]
 
     def get_QR_from_QK(self, QR_iw, QK_iw, l_list = []):
+      r0 = self.get_r0()
       QR_iw.zero()
       dim = self.dim
       P, Pinv = self.P, self.Pinv
       for l in (range(dim) if l_list==[] else l_list):
         for i in range(dim):
-          QR_iw["%02d"%l] += P[0,i] * QK_iw["%02d"%i] * Pinv[i,l]
+          QR_iw["%02d"%l] += P[r0,i] * QK_iw["%02d"%i] * Pinv[i,l]
 
     def get_independent_r_point_groups(self):
         if not ( self.m1==0 and self.n2==0 ):
