@@ -131,10 +131,12 @@ def dca_calculation(    dca_scheme, ph_symmetry=False,
       if mpi.is_master_node(): print "max times automatic: ",max_times        
 
     identical_pairs = dca_scheme.get_identical_pairs()
- 
+    if not (identical_pairs is None):
+      identical_pairs = {'x': identical_pairs}
+
     actions =[  generic_action(  name = "lattice",
                     main = lambda data: nested_mains.lattice(data, n=n, ph_symmetry=ph_symmetry, accepted_mu_range=[-2.0,2.0]),
-                    mixers = [], cautionaries = [], allowed_errors = [],    
+                    mixers = [], cautionaries = [ ], allowed_errors = [],    
                     printout = lambda data, it: ( [data.dump_general( quantities = ['GK_iw','GR_iw'], suffix='-current' ), data.dump_scalar(suffix='-current')
                                                   ] if ((it+1) % print_current==0) else None 
                                                 )
@@ -148,9 +150,9 @@ def dca_calculation(    dca_scheme, ph_symmetry=False,
                                                                n_cycles=n_cycles, max_times = max_times, solver_data_package = solver_data_package )),
                     mixers = [], cautionaries = [lambda data,it: local_nan_cautionary(data, data.impurity_struct, Qs = ['Sigma_imp_iw'], raise_exception = True),                                                 
                                                  lambda data,it: ( symmetric_G_and_self_energy_on_impurity(data.G_imp_iw, data.Sigma_imp_iw, data.solvers, 
-                                                                                                          {'x': identical_pairs}, {'x': identical_pairs} )
-                                                                   if it>=5 else  
-                                                                   symmetrize_cluster_impurity(data.Sigma_imp_iw, {'x': identical_pairs}) )
+                                                                                                          identical_pairs, identical_pairs )
+                                                                   if it>=0 else  
+                                                                   symmetrize_cluster_impurity(data.Sigma_imp_iw, identical_pairs) )
                                                 ], allowed_errors = [1],    
                     printout = lambda data, it: ( [ data.dump_general( quantities = ['Sigma_imp_iw','G_imp_iw'], suffix='-current' ),
                                                     data.dump_solvers(suffix='-current')

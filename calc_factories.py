@@ -4,6 +4,7 @@ from data_containers import cellular_data
 from data_containers import dca_data
 from data_containers import dca_plus_data
 from action_cautionaries import impose_real_valued_in_imtime_numpy
+from action_cautionaries import impose_real_valued_in_imtime
 from getters import *
 from impurity_solvers import solvers
 
@@ -88,10 +89,13 @@ def prepare_dca( data, dca_scheme, solver_class = solvers.ctint ):
   data.get_SigmaR = lambda: full_fill_SigmaR_iw_from_Sigma_imp_iw(data.SigmaR_iw, data.Sigma_imp_iw, lambda i: dca_scheme.i_to_ij(i))
   data.get_SigmaK = lambda: full_fill_SigmaK_iw_from_SigmaR_iw(data.SigmaK_iw, data.SigmaR_iw, dca_scheme.P, dca_scheme.Pinv)
 
-  data.get_GK = lambda: full_fill_GK_iw(data.GK_iw, data.SigmaK_iw, data.mus[r0_key], dca_scheme.dca_patches)
-  data.get_GR0 = lambda:  full_fill_GweissR_iw_from_GweissK_iw(data.GR_iw, data.GK_iw, dca_scheme.P, dca_scheme.Pinv, l_list = [r0])
+  data.get_GK = lambda: [ full_fill_GK_iw(data.GK_iw, data.SigmaK_iw, data.mus[r0_key], dca_scheme.dca_patches), 
+                          [impose_real_valued_in_imtime(g) for name,g in data.GK_iw] ]
+  data.get_GR0 = lambda:  [ dca_scheme.get_QR_from_QK(data.GR_iw, data.GK_iw, l_list = [r0]), 
+                            impose_real_valued_in_imtime(data.GR_iw[r0_key]) ]
   data.get_n_from_GR0 = lambda: blockwise_get_n_from_G_loc_iw(data.GR_iw[r0_key], fit_tail_starting_iw = 14.0, ntau = None, site_index = 0)
-  data.get_GR = lambda: full_fill_GweissR_iw_from_GweissK_iw(data.GR_iw, data.GK_iw, dca_scheme.P, dca_scheme.Pinv, l_list = [])
+  data.get_GR = lambda: [ dca_scheme.get_QR_from_QK(data.GR_iw, data.GK_iw), 
+                         [impose_real_valued_in_imtime(g) for name,g in data.GR_iw] ]
   data.get_Gijw = data.get_GR
 
   data.set_mu = lambda mu: set_mu(mu, data)

@@ -6,8 +6,11 @@ import pytriqs.utility.mpi as mpi
 from pytriqs.plot.mpl_interface import *
 
 import numpy as np
+from numpy import pi
 import numpy.linalg
 from scipy.spatial import Voronoi
+
+
 
 from data_containers import IBZ
 
@@ -48,16 +51,20 @@ class dca_struct:
         d2 = np.array([m1,-n1])/float(m1*n2-n1*m2)
 
         return ex, ey, R1, R2, d1, d2
+
+    def get_xy_minmax(self):
+        R1,R2 = self.R1, self.R2
+        x_min = min(0, R1[0], R2[0], (R1+R2)[0])
+        x_max = max(0, R1[0], R2[0], (R1+R2)[0])
+        y_min = min(0, R1[1], R2[1], (R1+R2)[1])
+        y_max = max(0, R1[1], R2[1], (R1+R2)[1])
+        return x_min,x_max,y_min,y_max  
         
     def get_r_points(self):
         eps = self.eps
         ex, ey, R1, R2, d1, d2 = self.ex, self.ey, self.R1, self.R2, self.d1, self.d2
         
-        x_min = min(0, R1[0], R2[0], (R1+R2)[0])
-        x_max = max(0, R1[0], R2[0], (R1+R2)[0])
-        y_min = min(0, R1[1], R2[1], (R1+R2)[1])
-        y_max = max(0, R1[1], R2[1], (R1+R2)[1])
-
+        x_min,x_max,y_min,y_max = self.get_xy_minmax()
         # Get the direct lattice points
         r_points = []
         for x in range(x_min, x_max+1):
@@ -88,7 +95,8 @@ class dca_struct:
                 if (kv[0]>-eps) and (kv[1]>-eps) and (kv[0]<(1-eps)) and (kv[1]<(1-eps)):
                     k_unit.append(kv)
         pi = np.arccos(-1)
-        k_points = 2*pi*np.array(k_unit)
+        k_unit = np.array(k_unit)
+        k_points = 2*pi*k_unit
         assert(len(k_unit) == dim)
         return k_unit, k_points
     
@@ -102,6 +110,14 @@ class dca_struct:
         res = np.array([ V.vertices[n] for n in V.regions[V.point_region[2*L*L+L]] ])
         return res   
     
+    def get_voronoi(self):
+        k1,k2,k_unit,L = self.d1, self.d2, self.k_unit, 10        
+        kpts = []
+        for u in range(-L,L):
+            for v in range(-L,L):
+                kpts.append(u*k1+v*k2)
+        return Voronoi(np.array(kpts))
+
     def get_dca_patches(self):
         d1,d2,k_unit,TB = self.d1, self.d2, self.k_unit, self.TB
         # Define the patches
@@ -183,7 +199,9 @@ class dca_struct:
           QR_iw["%02d"%l] += P[0,i] * QK_iw["%02d"%i] * Pinv[i,l]
 
     def get_independent_r_point_groups(self):
-        assert self.m1==0 and self.n2==0, 'inapplicable to general clusters'
+        if not ( self.m1==0 and self.n2==0 ):
+          print 'inapplicable to general clusters, returning None'
+          return None
         n1,m2 = self.n1,self.m2
         
         indep_r_groups = []
@@ -312,29 +330,33 @@ class dca_struct:
             if list(self.r_points[r0]) == [0,0]: return r0
         assert found, "there has to be a zero real space vector" 
     
-    def plot_r_points(self):
-        plot(x_min,y_min,'.')
-        plot(x_max,y_max,'D')
+    def plot_r_points(self, plt):
+        x_min,x_max,y_min,y_max = self.get_xy_minmax()
+        r_points, R1, R2, d1, d2 = self.r_points, self.R1, self.R2, self.d1, self.d2
+        
+        plt.plot(x_min,y_min,'.')
+        plt.plot(x_max,y_max,'D')
 
-        plot([0,R1[0]],[0,R1[1]],'x-')
-        plot([0,R2[0]],[0,R2[1]],'x-')
-        plot([0,d1[0]],[0,d1[1]],'d-')
-        plot([0,d2[0]],[0,d2[1]],'d-')
-        plot(r_points[:,0],r_points[:,1],'o')
-        axes().set_aspect('equal')
-        xlim(x_min-1,x_max+1)
-        ylim(y_min-1,y_max+1)
-        show() 
+        plt.plot([0,R1[0]],[0,R1[1]],'x-')
+        plt.plot([0,R2[0]],[0,R2[1]],'x-')
+        plt.plot([0,d1[0]],[0,d1[1]],'d-')
+        plt.plot([0,d2[0]],[0,d2[1]],'d-')
+        plt.plot(r_points[:,0],r_points[:,1],'o')
+        plt.axes().set_aspect('equal')
+        plt.xlim(x_min-1,x_max+1)
+        plt.ylim(y_min-1,y_max+1)
+        plt.show() 
 
-    def plot_k_points(self):        
-        plot(k_points[:,0],k_points[:,1],'o')
-        xlim(0,2*pi)
-        ylim(0,2*pi)
-        axes().set_aspect('equal')
-        show()
-        plot(k_unit[:,0],k_unit[:,1],'o')
-        xlim(0,1.0)
-        ylim(0,1.0)
-        axes().set_aspect('equal')
-        show()
+    def plot_k_points(self, plt):        
+        k_points, k_unit = self.k_points, self.k_unit
+        plt.plot(k_points[:,0],k_points[:,1],'o')
+        plt.xlim(0,2*pi)
+        plt.ylim(0,2*pi)
+        plt.axes().set_aspect('equal')
+        plt.show()
+#        plt.plot(k_unit[:,0],k_unit[:,1],'o')
+#        plt.xlim(0,1.0)
+#        plt.ylim(0,1.0)
+#        plt.axes().set_aspect('equal')
+#        plt.show()
         

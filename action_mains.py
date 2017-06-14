@@ -20,7 +20,7 @@ class nested_mains:
 
     if (n is None) or ((n==0.5) and ph_symmetry):
       if mpi.is_master_node(): print "no mu search to be performed! it is your duty to set the chemical potential to U/2. mu =",data.get_mu()
-      data.get_n()
+      print 'n on the lattice : ', data.get_n()
     else:
       def func(var, data):
         mu = var[0]
@@ -34,7 +34,7 @@ class nested_mains:
         #print "dt.ns: ", dt.ns
           
         val = 1.0-abs(n - dtn)  
-        if mpi.is_master_node(): print "amoeba func call: val = ",val
+        if mpi.is_master_node(): print "amoeba func call: mu: %.2f n: %.2f dtn: %.2f val = "%(mu,n,dtn),val
         if val != val: return -1e+6
         else: return val
 

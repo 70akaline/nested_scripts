@@ -95,6 +95,7 @@ def symmetrize_cluster_impurities(X_imp_iw, identical_pairs_across_impurities, n
 
 
 def symmetric_G_and_self_energy_on_impurity(G_imp_iw, Sigma_imp_iw, solvers, identical_pairs_Sigma, identical_pairs_G, across_imps = False, identical_pairs_G_ai = []):
+  if (identical_pairs_Sigma is None) or (identical_pairs_G is None): return False
   M_imp_dict = {}
   blocks = [name for name, g in solvers[solvers.keys()[0]].G0_iw]
   for b in blocks:
@@ -119,7 +120,7 @@ def symmetric_G_and_self_energy_on_impurity(G_imp_iw, Sigma_imp_iw, solvers, ide
     shift[C] = {} 
     for b in blocks:
       nw = len(solvers[C].G0_shift_iw[b].data[:,0,0])
-      shift[C][b] = inv(solvers[C].G0_shift_iw[b].data[nw/2+10,:,:]) - inv(solvers[C].G0_iw[b].data[nw/2+10,:,:]) 
+      shift[C][b] = inv(solvers[C].G0_shift_iw[b].data[nw/2,:,:]) - inv(solvers[C].G0_iw[b].data[nw/2,:,:]) 
 
     G_imp = deepcopy(solvers[C].G_iw)
     for b in blocks:
