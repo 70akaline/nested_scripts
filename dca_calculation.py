@@ -132,6 +132,7 @@ def dca_calculation(    dca_scheme, ph_symmetry=False,
 
     identical_pairs = dca_scheme.get_identical_pairs()
     if not (identical_pairs is None):
+      print "identical pairs not known, there will be no symmetrization"
       identical_pairs = {'x': identical_pairs}
 
     actions =[  generic_action(  name = "lattice",
@@ -151,7 +152,7 @@ def dca_calculation(    dca_scheme, ph_symmetry=False,
                     mixers = [], cautionaries = [lambda data,it: local_nan_cautionary(data, data.impurity_struct, Qs = ['Sigma_imp_iw'], raise_exception = True),                                                 
                                                  lambda data,it: ( symmetric_G_and_self_energy_on_impurity(data.G_imp_iw, data.Sigma_imp_iw, data.solvers, 
                                                                                                           identical_pairs, identical_pairs )
-                                                                   if it>=0 else  
+                                                                   if it>=100 else  
                                                                    symmetrize_cluster_impurity(data.Sigma_imp_iw, identical_pairs) )
                                                 ], allowed_errors = [1],    
                     printout = lambda data, it: ( [ data.dump_general( quantities = ['Sigma_imp_iw','G_imp_iw'], suffix='-current' ),
@@ -206,7 +207,7 @@ def dca_calculation(    dca_scheme, ph_symmetry=False,
                             h5key = 'diffs_SigmaR' ) ]
 
     dmft = generic_loop(
-                name = "nested-cluster DMFT", 
+                name = "DCA", 
                 actions = actions,
                 convergers = convergers,  
                 monitors = monitors )
@@ -251,10 +252,12 @@ def dca_calculation(    dca_scheme, ph_symmetry=False,
       print "Cautionary error!!! exiting..."
       solver_data_package['construct|run|exit'] = 2
       if MASTER_SLAVE_ARCHITECTURE and (mpi.size>1): solver_data_package = mpi.bcast(solver_data_package)
+
       break
 
     if not MASTER_SLAVE_ARCHITECTURE: mpi.barrier()
     counter += 1
   if not (solver_data_package is None): solver_data_package['construct|run|exit'] = 2
-  if MASTER_SLAVE_ARCHITECTURE and (mpi.size>1): solver_data_package = mpi.bcast(solver_data_package)
+  if MASTER_SLAVE_ARCHITECTURE and (mpi.size>1):  solver_data_package = mpi.bcast(solver_data_package)
+
   return dt, monitors, convergers

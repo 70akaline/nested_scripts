@@ -86,8 +86,8 @@ def prepare_dca( data, dca_scheme, solver_class = solvers.ctint ):
  
   r0 = dca_scheme.get_r0()
   r0_key = '%02d'%r0
-  data.get_SigmaR = lambda: full_fill_SigmaR_iw_from_Sigma_imp_iw(data.SigmaR_iw, data.Sigma_imp_iw, lambda i: dca_scheme.i_to_ij(i))
-  data.get_SigmaK = lambda: full_fill_SigmaK_iw_from_SigmaR_iw(data.SigmaK_iw, data.SigmaR_iw, dca_scheme.P, dca_scheme.Pinv)
+  data.get_SigmaR = lambda: dca_scheme.get_QR_from_Q_imp(data.SigmaR_iw, data.Sigma_imp_iw)
+  data.get_SigmaK = lambda: dca_scheme.get_QK_from_QR(data.SigmaK_iw, data.SigmaR_iw)
 
   data.get_GK = lambda: [ full_fill_GK_iw(data.GK_iw, data.SigmaK_iw, data.mus[r0_key], dca_scheme.dca_patches), 
                           [impose_real_valued_in_imtime(g) for name,g in data.GK_iw] ]
@@ -103,8 +103,8 @@ def prepare_dca( data, dca_scheme, solver_class = solvers.ctint ):
   data.get_n = lambda: [data.get_GK(), data.get_GR0(), set_n(data.get_n_from_GR0(),data)][-1]
 
   data.get_GweissK = lambda: full_fill_GweissK_iw_from_Dyson(data.GweissK_iw, data.GK_iw, data.SigmaK_iw)
-  data.get_GweissR = lambda: full_fill_GweissR_iw_from_GweissK_iw(data.GweissR_iw, data.GweissK_iw, dca_scheme.P, dca_scheme.Pinv)
-  data.get_Gweiss_iw = lambda: full_fill_Gweiss_iw_from_GweissR_iw(data.Gweiss_iw, data.GweissR_iw, dca_scheme.ij_to_0i)
+  data.get_GweissR = lambda: dca_scheme.get_QR_from_QK(data.GweissR_iw, data.GweissK_iw)
+  data.get_Gweiss_iw = lambda: dca_scheme.get_Q_imp_from_QR(data.Gweiss_iw, data.GweissR_iw)
 
   data.get_Gweiss = lambda: [data.get_GweissK(), data.get_GweissR(), data.get_Gweiss_iw()]
 

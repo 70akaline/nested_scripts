@@ -363,22 +363,22 @@ def full_fill_Sigmakw_from_gkw(Sigmakw, ws, mu, gkw):
 #-----------------------------------------------------------------------------------------------------------------------------------------------#
 #                                        dca specific
 #-----------------------------------------------------------------------------------------------------------------------------------------------#
-
-def full_fill_SigmaR_iw_from_Sigma_imp_iw(SigmaR_iw, Sigma_imp_iw, i_to_ij):
-  if mpi.is_master_node(): print "full_fill_SigmaR_iw_from_Sigma_imp_iw"
-  block = [name for name,s in Sigma_imp_iw]
-  assert len(block)==1, "in dca there is only one impurity problem"
-  for R, sig in SigmaR_iw:
-    i,j = i_to_ij(int(R))
-    sig << Sigma_imp_iw[block[0]][i,j]
-
-def full_fill_SigmaK_iw_from_SigmaR_iw(SigmaK_iw, SigmaR_iw, P, Pinv):
-  if mpi.is_master_node(): print "full_fill_SigmaK_iw_from_Sigma_imp_iw"
-  SigmaK_iw.zero()
-  dim = len([name for name,g in SigmaK_iw])  
-  for i in range(dim):
-    for l in range(dim):
-      SigmaK_iw["%02d"%i] += dim * Pinv[i,0] * SigmaR_iw["%02d"%l] * P[l,i]
+#OBSOLETE
+#def full_fill_SigmaR_iw_from_Sigma_imp_iw(SigmaR_iw, Sigma_imp_iw, i_to_ij):
+#  if mpi.is_master_node(): print "full_fill_SigmaR_iw_from_Sigma_imp_iw"
+#  block = [name for name,s in Sigma_imp_iw]
+#  assert len(block)==1, "in dca there is only one impurity problem"
+#  for R, sig in SigmaR_iw:
+#    i,j = i_to_ij(int(R))
+#    sig << Sigma_imp_iw[block[0]][i,j]
+#OBSOLETE
+#def full_fill_SigmaK_iw_from_SigmaR_iw(SigmaK_iw, SigmaR_iw, P, Pinv):
+#  if mpi.is_master_node(): print "full_fill_SigmaK_iw_from_Sigma_imp_iw"
+#  SigmaK_iw.zero()
+#  dim = len([name for name,g in SigmaK_iw])  
+#  for i in range(dim):
+#    for l in range(dim):
+#      SigmaK_iw["%02d"%i] += dim * Pinv[i,0] * SigmaR_iw["%02d"%l] * P[l,i]
   
 def full_fill_GweissK_iw_from_Dyson(GweissK_iw, GK_iw, SigmaK_iw):
   for K,g0 in GweissK_iw:
@@ -390,23 +390,23 @@ def full_fill_GweissK_iw_from_Dyson(GweissK_iw, GK_iw, SigmaK_iw):
     g0 << inverse(inverse(GK_iw[K]) + SigmaK_iw[K])
     #except:
     #  pass
-
-def full_fill_GweissR_iw_from_GweissK_iw(GweissR_iw, GweissK_iw, P, Pinv, l_list = []):
-  if mpi.is_master_node(): print "full_fill_GweissR_iw_from_GweissK_iw"
-  GweissR_iw.zero()
-  dim = len([name for name,g in GweissR_iw])  
-  for l in (range(dim) if l_list==[] else l_list):
-    for i in range(dim):
-      GweissR_iw["%02d"%l] += P[0,i] * GweissK_iw["%02d"%i] * Pinv[i,l]
-
-def full_fill_Gweiss_iw_from_GweissR_iw(Gweiss_iw, GweissR_iw, ij_to_0i):
-  if mpi.is_master_node(): print "full_fill_Gweiss_iw_from_GweissR_iw"
-  dim = len([name for name,g in GweissR_iw])  
-  block = [name for name,s in Gweiss_iw]
-  assert len(block)==1, "in dca there is only one impurity problem"
-  for i in range(dim):
-    for j in range(dim):
-        Gweiss_iw[block[0]][i,j] << GweissR_iw["%02d"%ij_to_0i[i,j]]
+#OBSOLETE
+#def full_fill_GweissR_iw_from_GweissK_iw(GweissR_iw, GweissK_iw, P, Pinv, l_list = []):
+#  if mpi.is_master_node(): print "full_fill_GweissR_iw_from_GweissK_iw"
+#  GweissR_iw.zero()
+#  dim = len([name for name,g in GweissR_iw])  
+#  for l in (range(dim) if l_list==[] else l_list):
+#    for i in range(dim):
+#      GweissR_iw["%02d"%l] += P[0,i] * GweissK_iw["%02d"%i] * Pinv[i,l]
+#OBSOLETE
+#def full_fill_Gweiss_iw_from_GweissR_iw(Gweiss_iw, GweissR_iw, ij_to_0i):
+#  if mpi.is_master_node(): print "full_fill_Gweiss_iw_from_GweissR_iw"
+#  dim = len([name for name,g in GweissR_iw])  
+#  block = [name for name,s in Gweiss_iw]
+#  assert len(block)==1, "in dca there is only one impurity problem"
+#  for i in range(dim):
+#    for j in range(dim):
+#        Gweiss_iw[block[0]][i,j] << GweissR_iw["%02d"%ij_to_0i[i,j]]
 
 def full_fill_GK_iw(GK_iw, SigmaK_iw, mu, dca_patches):
   if mpi.is_master_node(): print "full_fill_GK_iw...",
@@ -414,26 +414,26 @@ def full_fill_GK_iw(GK_iw, SigmaK_iw, mu, dca_patches):
     GK_iw[p.name] = p.ht(Sigma = SigmaK_iw[p.name], mu = mu)
   if mpi.is_master_node(): print "DONE"
 
-
-def get_Sigmakw_from_SigmaK_iw(SigmaK_iw, dca_scheme, nk=64):
-    ks = numpy.linspace(0,2*pi,nk, endpoint=False)
-    nw = len(SigmaK_iw['00'].data[:,0,0])
-    Sigmakw = numpy.zeros((nw,nk,nk),dtype=numpy.complex_)            
-    full_k_points = list(dca_scheme.k_points)
-    full_k_points += list(dca_scheme.k_points+[0,2*pi])
-    full_k_points += list(dca_scheme.k_points+[2*pi,0])
-    full_k_points += list(dca_scheme.k_points+[2*pi,2*pi])
-                    
-    for kxi in range(nk):
-        for kyi in range(nk):
-            min_dist,min_l = 2*pi, 0
-            for l in range(len(full_k_points)):
-                dist = numpy.linalg.norm(numpy.array([ks[kxi],ks[kyi]]) - numpy.array(full_k_points[l]))
-                if dist<min_dist: min_dist, min_l = dist, l
-            while min_l>=dca_scheme.dim: min_l-=dca_scheme.dim
-            Sigmakw[:,kxi,kyi] = SigmaK_iw['%02d'%min_l].data[:,0,0]   
-
-    return Sigmakw, ks  
+#OBSOLETE
+#def get_Sigmakw_from_SigmaK_iw(SigmaK_iw, dca_scheme, nk=64):
+#    ks = numpy.linspace(0,2*pi,nk, endpoint=False)
+#    nw = len(SigmaK_iw['00'].data[:,0,0])
+#    Sigmakw = numpy.zeros((nw,nk,nk),dtype=numpy.complex_)            
+#    full_k_points = list(dca_scheme.k_points)
+#    full_k_points += list(dca_scheme.k_points+[0,2*pi])
+#    full_k_points += list(dca_scheme.k_points+[2*pi,0])
+#    full_k_points += list(dca_scheme.k_points+[2*pi,2*pi])
+#                    
+#    for kxi in range(nk):
+#        for kyi in range(nk):
+#            min_dist,min_l = 2*pi, 0
+#            for l in range(len(full_k_points)):
+#                dist = numpy.linalg.norm(numpy.array([ks[kxi],ks[kyi]]) - numpy.array(full_k_points[l]))
+#                if dist<min_dist: min_dist, min_l = dist, l
+#            while min_l>=dca_scheme.dim: min_l-=dca_scheme.dim
+#            Sigmakw[:,kxi,kyi] = SigmaK_iw['%02d'%min_l].data[:,0,0]   
+#
+ #   return Sigmakw, ks  
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------#
 #                                        dca_plus specific

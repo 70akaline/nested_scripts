@@ -135,10 +135,11 @@ class dca_struct:
     def get_ij_to_0i_map(self):
         # Fill the map (i,j) --> (0,i)
         dim, eps, d1, d2, R1, R2, r_points = self.dim, self.eps, self.d1, self.d2, self.R1, self.R2, self.r_points
+        r0 = self.get_r0()
         ij_to_0i = np.zeros((dim,dim), np.int32)
         for i in range(dim):
           for j in range(dim):
-            v = r_points[0] + r_points[j] - r_points[i]
+            v = r_points[r0] + r_points[j] - r_points[i]
             if (np.dot(v,d1)<-eps): v += R1
             if (np.dot(v,d1)>(1-eps)): v -= R1
             if (np.dot(v,d2)<-eps): v += R2
@@ -155,7 +156,26 @@ class dca_struct:
                 if self.ij_to_0i[i,j] == ind:
                     return i,j
         assert False, "dca i_to_ij: not found!!!!"
+
+    def get_QR_from_Q_imp(self, QR_iw, Q_imp_iw):
+      dim = len([name for name,q in QR_iw])  
+      assert dim == self.dim, "wrong size of QR container" 
+      block = [name for name,q in Q_imp_iw]
+      assert len(block)==1, "in dca there is only one impurity problem"
+      for R, q in QR_iw:
+        i,j = self.i_to_ij(int(R))
+        q << Q_imp_iw[block[0]][i,j]
     
+    def get_Q_imp_from_QR(self, Q_imp_iw, QR_iw):
+      if mpi.is_master_node(): print "full_fill_Gweiss_iw_from_GweissR_iw"
+      dim = len([name for name,q in QR_iw])  
+      assert dim == self.dim, "wrong size of QR container" 
+      block = [name for name,q in Q_imp_iw]
+      assert len(block)==1, "in dca there is only one impurity problem"
+      for i in range(dim):
+        for j in range(dim):
+            Q_imp_iw[block[0]][i,j] << QR_iw["%02d"%(self.ij_to_0i[i,j])]
+
     def get_identical_pairs(self):
         dim, ij_to_0i = self.dim, self.ij_to_0i
         identical_pairs = []
@@ -228,6 +248,26 @@ class dca_struct:
             tot/=len(ir)
             for l in ir:
                 QR["%.2d"%l].data[:,:,:] = tot
+
+    def get_Qkw_from_QK_iw(self, QK_iw, nk=64): #piecewise constant interpolation, voronoi patches
+        ks = numpy.linspace(0,2*pi,nk, endpoint=False)
+        nw = len(QK_iw['00'].data[:,0,0])
+        Qkw = numpy.zeros((nw,nk,nk),dtype=numpy.complex_)            
+        full_k_points = list(self.k_points)
+        full_k_points += list(self.k_points+[0,2*pi])
+        full_k_points += list(self.k_points+[2*pi,0])
+        full_k_points += list(self.k_points+[2*pi,2*pi])
+                        
+        for kxi in range(nk):
+            for kyi in range(nk):
+                min_dist,min_l = 2*pi, 0
+                for l in range(len(full_k_points)):
+                    dist = numpy.linalg.norm(numpy.array([ks[kxi],ks[kyi]]) - numpy.array(full_k_points[l]))
+                    if dist<min_dist: min_dist, min_l = dist, l
+                while min_l>=self.dim: min_l-=self.dim
+                Qkw[:,kxi,kyi] = QK_iw['%02d'%min_l].data[:,0,0]   
+
+        return Qkw, ks 
 
     def get_Qk_from_QR_embedded(self, Qkw, QR_iw, ks):
         assert self.m1==0 and self.n2==0, 'inapplicable to general clusters'

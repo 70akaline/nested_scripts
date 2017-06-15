@@ -130,7 +130,7 @@ class solvers:
       dct = deepcopy(solver_data_package['solve_parameters'])
       del dct['U']
       solver.solve(h_int = h_int, **dct )
-
+      if mpi.is_master_node(): print "average sign: ",solver.average_sign
       if not only_sign:
         G_iw = deepcopy(solver.G_iw)
         Sigma_iw = deepcopy(solver.Sigma_iw)
@@ -151,6 +151,10 @@ class solvers:
         solver_data_package = mpi.bcast(solver_data_package)
 
         if printout: print "[Node ",mpi.rank,"] received instructions!!!"
+
+        if solver_data_package is None: 
+          if printout: print "[Node ",mpi.rank,"] solver_data_package is None, will exit now. Goodbye."          
+          break
 
         if solver_data_package['construct|run|exit'] == 0:     
           if printout: print "[Node ",mpi.rank,"] constructing solvers!!!"
@@ -186,7 +190,7 @@ class solvers:
             print "[Node ",mpi.rank,"] ERROR: crash during running solver" 
 
         if solver_data_package['construct|run|exit'] == 2: 
-          if printout: print "[Node ",mpi.rank,"] received exit signal, will exit now. Goodbye."    
+          if printout: print "[Node ",mpi.rank,"] received exit signal, will exit now. Goodbye."          
           break
 
     @staticmethod
@@ -306,40 +310,45 @@ class solvers:
 
         if printout: print "[Node ",mpi.rank,"] received instructions!!!"
 
-        if solver_data_package['construct|run|exit'] == 0:     
-          if printout: print "[Node ",mpi.rank,"] constructing solvers!!!"
-          solvers = {}
-          impurity_struct = solver_data_package['impurity_struct']
-          for C in impurity_struct.keys():
-            solver_struct = {'up': impurity_struct[C], 'dn': impurity_struct[C]}  
-            solver_data_package['constructor_parameters']['gf_struct'] = solver_struct        
-            solvers[C] = cthybSolver( **(solver_data_package['constructor_parameters']) )
+        try:
+          if solver_data_package['construct|run|exit'] == 0:     
+            if printout: print "[Node ",mpi.rank,"] constructing solvers!!!"
+            solvers = {}
+            impurity_struct = solver_data_package['impurity_struct']
+            for C in impurity_struct.keys():
+              solver_struct = {'up': impurity_struct[C], 'dn': impurity_struct[C]}  
+              solver_data_package['constructor_parameters']['gf_struct'] = solver_struct        
+              solvers[C] = cthybSolver( **(solver_data_package['constructor_parameters']) )
 
-        if solver_data_package['construct|run|exit'] == 1:     
-          if printout: print "[Node ",mpi.rank,"] about to run..."
-          solver = solvers[solver_data_package['which_solver']] 
-          solver.G0_iw << solver_data_package['G0_iw']    
+          if solver_data_package['construct|run|exit'] == 1:     
+            if printout: print "[Node ",mpi.rank,"] about to run..."
+            solver = solvers[solver_data_package['which_solver']] 
+            solver.G0_iw << solver_data_package['G0_iw']    
 
-          block_names = [name for name,g in solver.G0_iw]
-          N_states = len(solver.G0_iw[block_names[0]].data[0,0,:])
-          gf_struct = {block_names[0] : range(N_states), block_names[1] : range(N_states)}
-          U = solver_data_package['solve_parameters']['U']
-          h_int = U * n(block_names[0],0)*n(block_names[1],0)
-          for i in range(1,N_states):
-            h_int += U * n(block_names[0],i)*n(block_names[1],i)
-          QN = [ sum( [n(bl,i) for i in range(N_states)], Operator() ) for bl in block_names ]
-          try:
-            dct = deepcopy(solver_data_package['solve_parameters'])
-            del dct['U']
-            solver.solve(h_int = h_int, quantum_numbers = QN, **dct )
+            block_names = [name for name,g in solver.G0_iw]
+            N_states = len(solver.G0_iw[block_names[0]].data[0,0,:])
+            gf_struct = {block_names[0] : range(N_states), block_names[1] : range(N_states)}
+            U = solver_data_package['solve_parameters']['U']
+            h_int = U * n(block_names[0],0)*n(block_names[1],0)
+            for i in range(1,N_states):
+              h_int += U * n(block_names[0],i)*n(block_names[1],i)
+            QN = [ sum( [n(bl,i) for i in range(N_states)], Operator() ) for bl in block_names ]
+            try:
+              dct = deepcopy(solver_data_package['solve_parameters'])
+              del dct['U']
+              solver.solve(h_int = h_int, quantum_numbers = QN, **dct )
 
-            if printout: print "[Node ",mpi.rank,"] finished running successfully!"
-          except Exception as e:
-            print "[Node ",mpi.rank,"] ERROR: crash during running solver" 
+              if printout: print "[Node ",mpi.rank,"] finished running successfully!"
+            except Exception as e:
+              print "[Node ",mpi.rank,"] ERROR: crash during running solver" 
 
-        if solver_data_package['construct|run|exit'] == 2: 
-          if printout: print "[Node ",mpi.rank,"] received exit signal, will exit now. Goodbye."    
+          if solver_data_package['construct|run|exit'] == 2: 
+            if printout: print "[Node ",mpi.rank,"] received exit signal, will exit now. Goodbye."    
+            break
+        except:
+          if printout: print "[Node ",mpi.rank,"] something went wrong. Will exit now! Goodbye."    
           break
+
 
     @staticmethod
     def dump(solver, archive_name, suffix=''):    
