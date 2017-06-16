@@ -5,6 +5,8 @@ import pytriqs.utility.mpi as mpi
 
 from pytriqs.plot.mpl_interface import *
 
+from matplotlib.patches import Polygon
+
 import numpy as np
 from numpy import pi
 import numpy.linalg
