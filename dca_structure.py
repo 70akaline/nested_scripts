@@ -23,7 +23,7 @@ class dca_struct:
         self.n2 = n2
         self.m2 = m2    
         self.Lmax = 5 * max(abs(n1),abs(m1),abs(n2),abs(m2))
-                
+                        
         self.ex = ex
         self.ey = ey                
         assert abs(numpy.linalg.norm(ex)-1)<1e-5, "ex not unit vector"
@@ -32,11 +32,7 @@ class dca_struct:
         self.TB = TB
         
         self.dim = abs(n1*m2 - m1*n2)
-        if mpi.rank == 0:
-            print 'dca_scheme:'
-            print "   Nc = ", self.dim
-            print "   n1,m1,n2,m2 = ", n1,m1,n2,m2
-            print "   Lmax: ", self.Lmax  
+
         self.eps = 0.001
         self.R1, self.R2, self.d1, self.d2, self.BZsize = self.get_auxiliary()
         self.r_points = self.get_r_points()
@@ -45,6 +41,14 @@ class dca_struct:
         self.ij_to_0i = self.get_ij_to_0i_map()
         self.P, self.Pinv = self.get_FT_matrices()
         
+        if mpi.rank == 0:
+            print 'dca_scheme:'
+            print "   ex,ey = ", ex,ey
+            print "   Nc = ", self.dim
+            print "   n1,m1,n2,m2 = ", n1,m1,n2,m2
+            print "   Lmax: ", self.Lmax  
+            print "   r0 = ",self.get_r0()
+
         
     def get_auxiliary(self):
         n1, n2, m1, m2, ex, ey = self.n1, self.n2, self.m1, self.m2, self.ex, self.ey
