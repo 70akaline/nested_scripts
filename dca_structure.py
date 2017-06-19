@@ -124,17 +124,35 @@ class dca_struct:
 
     def get_dca_patches(self):
         d1,d2,k_unit,TB = self.d1, self.d2, self.k_unit, self.TB
+
+        # Prepare the reciprocal lattice vectors of the original lattice
+        a2xa3 = numpy.array([self.ey[1],-self.ey[0]])
+        a3xa1 = numpy.array([-self.ex[1],self.ex[0]])
+        b1 = a2xa3 / numpy.dot(ex, a2xa3)
+        b2 = a3xa1 / numpy.dot(ex, a2xa3)
+            
+        #print "b1:",b1
+        #print "b2:",b2
+        # Prepare the transformation matrix
+        P = numpy.transpose([b1,b2])
+        Pinv = numpy.linalg.inv(P)
+
         # Define the patches
         dca_patches = []
         ws = self.__class__.get_wigner_seitz(d1,d2)
         for i, kv in enumerate(k_unit):
             p = ws + kv
+            #print "old p: ",p
+            # Change the basis of the vectors
+            for ppi, pp in enumerate(p):
+                p[ppi] = numpy.dot(Pinv,pp)
+            #print "new p: ",p
             dca_patches += [ BZPatch(name = '%02d'%i, polygons = [p]) ]
-    
+
         # Hilbert transforms
         for p in dca_patches:
           p.ht = HilbertTransform(p.dos(TB, 101, 400))
-        return dca_patches    
+        return dca_patches        
     
     def get_ij_to_0i_map(self):
         # Fill the map (i,j) --> (0,i)
