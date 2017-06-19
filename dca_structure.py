@@ -422,30 +422,64 @@ class dca_struct:
         plt.legend(bbox_to_anchor=(1.5,1.0))
         plt.show() 
 
-    def plot_k_points(self, plt):      
-        fig, ax = plt.subplots()
-        BZsize = 2.0*pi*numpy.array(self.BZsize)
-        ax.add_artist(Polygon([[0,0],[BZsize[0],0],[BZsize[0],BZsize[1]],[0,BZsize[1]]],
-                              True, color='gray', alpha=0.2, lw=2,ec='black'))                            
-        
-        colors = ['blue','red','green','orange','gray','magenta','cyan']
-        counter = 0
-        for patch in self.dca_patches:
-            trgls = 2.0*pi*numpy.array(patch._triangles)
-            ax.add_artist(Polygon(trgls, True, color=colors[counter], alpha=0.5, lw=0))            
-            counter += 1
-            if counter>=len(colors): counter=0        
-        
-        
-        k_points, k_unit = self.k_points, self.k_unit
-        
-        all_points = numpy.array([2.0*numpy.pi*(n*self.d1+m*self.d2) for n in range(-10,10) for m in range(-10,10)])
-        plt.plot(all_points[:,0],all_points[:,1],'o',color='lightgray')
-        
-        plt.plot(k_points[:,0],k_points[:,1],'o')
+def plot_k_points(self, plt):      
+    fig, ax = plt.subplots()
 
-        plt.xlim(-pi,3*pi)
-        plt.ylim(-pi,3*pi)
-        plt.axes().set_aspect('equal')        
-        plt.show()
+    # Prepare the reciprocal lattice vectors of the original lattice
+    a2xa3 = numpy.array([self.ey[1],-self.ey[0]])
+    a3xa1 = numpy.array([-self.ex[1],self.ex[0]])
+    b1 = a2xa3 / numpy.dot(self.ex, a2xa3)
+    b2 = a3xa1 / numpy.dot(self.ex, a2xa3)
+
+    # Prepare the transformation matrix
+    P = numpy.transpose([b1,b2])
+    Pinv = numpy.linalg.inv(P)
+    
+    nk = 100
+    ks = numpy.linspace(-pi,3.0*pi,nk,endpoint=False)
+
+    epsk = numpy.zeros((nk,nk))
+
+    for kxi, kx in enumerate(ks):
+        for kyi, ky in enumerate(ks):
+            k = numpy.dot(Pinv,numpy.array([kx/(2.0*pi),ky/(2.0*pi)])) #change basis to d1,d2 to put in TB            
+            epsk[kxi,kyi] = energies_on_bz_path (TB, k, k, 1)              
+
+    CP = plt.contourf(ks,ks, numpy.transpose(epsk), levels=numpy.linspace(numpy.amin(epsk),numpy.amax(epsk),100))
+    plt.colorbar(CP)
+    plt.plot()    
+    
+    BZsize = 2.0*pi*numpy.array(self.BZsize)
+    ax.add_artist(Polygon([[0,0],[BZsize[0],0],[BZsize[0],BZsize[1]],[0,BZsize[1]]],
+                          True, color='gray', alpha=0.2, lw=2,ec='black'))                            
+
+    colors = ['blue','green','red','cyan','magenta','yellow','gray','white']
+    counter = 0
+    for patch in self.dca_patches:        
+        trgls = numpy.array(patch._triangles)
+        for trgli,trgl in enumerate(trgls):
+            trgls[trgli] = 2.0*pi*numpy.dot(P,trgl)
+        ax.add_artist(Polygon(trgls, True, color=colors[counter], alpha=0.5, lw=0))            
+        counter += 1
+        if counter>=len(colors): counter=0        
+
+    k_points, k_unit = self.k_points, self.k_unit
+
+    all_points = numpy.array([2.0*numpy.pi*(n*self.d1+m*self.d2) for n in range(-10,10) for m in range(-10,10)])
+    plt.plot(all_points[:,0],all_points[:,1],'o',color='lightgray')
+
+    plt.plot(k_points[:,0],k_points[:,1],'o', color='white')
+    
+    plt.xlim(-pi,3*pi)
+    plt.ylim(-pi,3*pi)
+    plt.axes().set_aspect('equal')        
+    plt.show()
+
+    for Ki,patch in enumerate(self.dca_patches):
+        dos = patch.dos(TB, 101, 1000)
+        plt.plot(dos.eps,dos.rho, label=r"$\mathbf{K}=(%.2f,%.2f)$"%(dca.k_points[Ki][0],dca.k_points[Ki][1]))
+    plt.legend(bbox_to_anchor=(1.5,1.0))
+    plt.xlabel(r"$\epsilon$")
+    plt.ylabel(r"$\rho(\mathbf{K};\epsilon)$")
+    plt.show()
         
