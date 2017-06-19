@@ -443,7 +443,7 @@ class dca_struct:
         for kxi, kx in enumerate(ks):
             for kyi, ky in enumerate(ks):
                 k = numpy.dot(Pinv,numpy.array([kx/(2.0*pi),ky/(2.0*pi)])) #change basis to d1,d2 to put in TB            
-                epsk[kxi,kyi] = energies_on_bz_path (TB, k, k, 1)              
+                epsk[kxi,kyi] = energies_on_bz_path (self.TB, k, k, 1)              
 
         CP = plt.contourf(ks,ks, numpy.transpose(epsk), levels=numpy.linspace(numpy.amin(epsk),numpy.amax(epsk),100))
         plt.colorbar(CP)
@@ -476,7 +476,7 @@ class dca_struct:
         plt.show()
 
         for Ki,patch in enumerate(self.dca_patches):
-            dos = patch.dos(TB, 101, 1000)
+            dos = patch.dos(self.TB, 101, 1000)
             plt.plot(dos.eps,dos.rho, label=r"$\mathbf{K}=(%.2f,%.2f)$"%(dca.k_points[Ki][0],dca.k_points[Ki][1]))
         plt.legend(bbox_to_anchor=(1.5,1.0))
         plt.xlabel(r"$\epsilon$")
