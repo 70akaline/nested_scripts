@@ -477,7 +477,7 @@ class dca_struct:
 
         for Ki,patch in enumerate(self.dca_patches):
             dos = patch.dos(self.TB, 101, 1000)
-            plt.plot(dos.eps,dos.rho, label=r"$\mathbf{K}=(%.2f,%.2f)$"%(dca.k_points[Ki][0],dca.k_points[Ki][1]))
+            plt.plot(dos.eps,dos.rho, label=r"$\mathbf{K}=(%.2f,%.2f)$"%(self.k_points[Ki][0],self.k_points[Ki][1]))
         plt.legend(bbox_to_anchor=(1.5,1.0))
         plt.xlabel(r"$\epsilon$")
         plt.ylabel(r"$\rho(\mathbf{K};\epsilon)$")
