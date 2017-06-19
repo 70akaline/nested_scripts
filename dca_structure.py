@@ -128,8 +128,8 @@ class dca_struct:
         # Prepare the reciprocal lattice vectors of the original lattice
         a2xa3 = numpy.array([self.ey[1],-self.ey[0]])
         a3xa1 = numpy.array([-self.ex[1],self.ex[0]])
-        b1 = a2xa3 / numpy.dot(ex, a2xa3)
-        b2 = a3xa1 / numpy.dot(ex, a2xa3)
+        b1 = a2xa3 / numpy.dot(self.ex, a2xa3)
+        b2 = a3xa1 / numpy.dot(self.ex, a2xa3)
             
         #print "b1:",b1
         #print "b2:",b2
