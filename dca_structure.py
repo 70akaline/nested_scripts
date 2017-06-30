@@ -36,7 +36,7 @@ class dca_struct:
         self.dim = abs(n1*m2 - m1*n2)
 
         self.eps = 0.001
-        self.R1, self.R2, self.d1, self.d2, self.BZsize = self.get_auxiliary()
+        self.R1, self.R2, self.d1, self.d2, self.BZsize, self.b1, self.b2 = self.get_auxiliary()
         self.r_points = self.get_r_points()
         self.k_unit, self.k_points = self.get_k_points()
         self.dca_patches = self.get_dca_patches()
@@ -45,9 +45,11 @@ class dca_struct:
         
         if mpi.rank == 0:
             print 'dca_scheme:'
-            print "   ex,ey = ", ex,ey
             print "   Nc = ", self.dim
             print "   n1,m1,n2,m2 = ", n1,m1,n2,m2
+            print "   ex,ey = ", self.ex,self.ey
+            print "   d1,d2 = ", self.d1,self.d2
+            print "   b1,b2 = ", self.b1,self.b2
             print "   Lmax: ", self.Lmax  
             print "   r0 = ",self.get_r0()
 
@@ -56,10 +58,12 @@ class dca_struct:
         n1, n2, m1, m2, ex, ey = self.n1, self.n2, self.m1, self.m2, self.ex, self.ey
 
         BZsize = [ 1.0/max(ex[0],ey[0]),1.0/max(ex[1],ey[1]) ]
-        
+
+        # Super-lattice vectors
         R1 = n1 * ex + m1 * ey
         R2 = n2 * ex + m2 * ey
 
+        # Reciprocal lattice vectors of the super-lattice
         R1x = R1[0] 
         R1y = R1[1] 
         R2x = R2[0] 
@@ -67,7 +71,13 @@ class dca_struct:
         d1 = np.array([R2y,-R2x])/float(R1x*R2y-R1y*R2x)
         d2 = np.array([R1y,-R1x])/float(R1y*R2x-R1x*R2y)        
 
-        return R1, R2, d1, d2, BZsize    
+        # Reciprocal lattice vectors of the original lattice
+        a2xa3 = numpy.array([self.ey[1],-self.ey[0]])
+        a3xa1 = numpy.array([-self.ex[1],self.ex[0]])
+        b1 = a2xa3 / numpy.dot(self.ex, a2xa3)
+        b2 = a3xa1 / numpy.dot(self.ex, a2xa3)
+
+        return R1, R2, d1, d2, BZsize, b1, b2    
        
     def get_r_points(self):
         eps = self.eps
@@ -124,17 +134,11 @@ class dca_struct:
 
     def get_dca_patches(self):
         d1,d2,k_unit,TB = self.d1, self.d2, self.k_unit, self.TB
-
-        # Prepare the reciprocal lattice vectors of the original lattice
-        a2xa3 = numpy.array([self.ey[1],-self.ey[0]])
-        a3xa1 = numpy.array([-self.ex[1],self.ex[0]])
-        b1 = a2xa3 / numpy.dot(self.ex, a2xa3)
-        b2 = a3xa1 / numpy.dot(self.ex, a2xa3)
-            
+           
         #print "b1:",b1
         #print "b2:",b2
         # Prepare the transformation matrix
-        P = numpy.transpose([b1,b2])
+        P = numpy.transpose([self.b1,self.b2])
         Pinv = numpy.linalg.inv(P)
 
         # Define the patches
@@ -425,11 +429,7 @@ class dca_struct:
     def plot_k_points(self, plt):      
         fig, ax = plt.subplots()
 
-        # Prepare the reciprocal lattice vectors of the original lattice
-        a2xa3 = numpy.array([self.ey[1],-self.ey[0]])
-        a3xa1 = numpy.array([-self.ex[1],self.ex[0]])
-        b1 = a2xa3 / numpy.dot(self.ex, a2xa3)
-        b2 = a3xa1 / numpy.dot(self.ex, a2xa3)
+        b1, b2 = self.b1, self.b2
 
         # Prepare the transformation matrix
         P = numpy.transpose([b1,b2])
