@@ -35,6 +35,7 @@ def dca_plus_calculation( dca_scheme, embedded = False, real_space_sc = False, n
                           accuracy = 1e-4, 
                           solver_data_package = None,
                           print_current = 1,
+                          insulating_initial = False,
                           initial_guess_archive_name = '', suffix=''):
 
   if mpi.is_master_node():
@@ -109,7 +110,7 @@ def dca_plus_calculation( dca_scheme, embedded = False, real_space_sc = False, n
       else:
         print "Working: U: %s T %s mutilde: %s "%(U,T,mutilde)
 
-    prepare_dca_plus( dt, dca_scheme, solver_class, Xi_alpha, n_RL_iterations, embedded, real_space_sc, no_convolution )
+    prepare_dca_plus( dt, dca_scheme, solver_class, Xi_alpha, n_RL_iterations, embedded, real_space_sc, no_convolution, impose_ph_symmetry=(ph_symmetry and n==0.5) )
     
     solver_class.initialize_solvers( dt, solver_data_package )
  
@@ -148,16 +149,19 @@ def dca_plus_calculation( dca_scheme, embedded = False, real_space_sc = False, n
                               ),
                 generic_action(  name = "pre_impurity",
                     main = lambda data: nested_mains.pre_impurity(data),
-                    mixers = [], cautionaries = [], allowed_errors = [],    
+                    mixers = [], cautionaries = [lambda data, it: impose_real_valued_in_imtime_numpy(data.Gweiss_iw['x'].data[:,:,:])], allowed_errors = [],    
                     printout = lambda data, it: (data.dump_general( quantities = ['GweissK_iw','GweissR_iw','Gweiss_iw'], suffix='-current' ) if ((it+1) % print_current==0) else None)  ),
                 generic_action(  name = "impurity",
                     main = (lambda data: nested_mains.impurity(data, U, symmetrize_quantities = True, alpha=alpha, delta=delta, automatic_alpha_and_delta = automatic_alpha_and_delta, 
                                                                n_cycles=n_cycles, max_times = max_times, solver_data_package = solver_data_package )),
-                    mixers = [], cautionaries = [lambda data,it: local_nan_cautionary(data, data.impurity_struct, Qs = ['Sigma_imp_iw'], raise_exception = True),                                                 
+                    mixers = [], cautionaries = [lambda data,it: local_nan_cautionary(data, data.impurity_struct, Qs = ['Sigma_imp_iw'], raise_exception = True),
+                                                 lambda data,it: impose_real_valued_in_imtime_numpy(data.Sigma_imp_iw['x'].data[:,:,:]),                                                 
                                                  lambda data,it: ( symmetric_G_and_self_energy_on_impurity(data.G_imp_iw, data.Sigma_imp_iw, data.solvers, 
                                                                                                           {'x': identical_pairs}, {'x': identical_pairs} )
                                                                    if it>=5 else  
-                                                                   symmetrize_cluster_impurity(data.Sigma_imp_iw, {'x': identical_pairs}) )
+                                                                   symmetrize_cluster_impurity(data.Sigma_imp_iw, {'x': identical_pairs}) ),
+                                                 lambda data,it: ( impose_particle_hole_symmetry(data.Sigma_imp_iw['x'].data[:,:,:], tail=U/2.0) if (ph_symmetry and n==0.5) else False ),
+                                                 lambda data,it: ( impose_particle_hole_symmetry(data.G_imp_iw['x'].data[:,:,:], tail=0.0) if (ph_symmetry and n==0.5) else False )
                                                 ], allowed_errors = [1],    
                     printout = lambda data, it: ( [ data.dump_general( quantities = ['Sigma_imp_iw','G_imp_iw'], suffix='-current' ),
                                                     data.dump_solvers(suffix='-current')
@@ -229,10 +233,13 @@ def dca_plus_calculation( dca_scheme, embedded = False, real_space_sc = False, n
           dt.set_mu( U/2.0)
         for C in dt.impurity_struct.keys():
           for l in dt.impurity_struct[C]: #just the local components (but on each site!)         
-            dt.Sigma_imp_iw[C][l,l] << U/2.0
+            #dt.Sigma_imp_iw[C][l,l] << U/2.0
+            dt.Sigma_imp_iw[C].data[:,l,l] = U/2.0-int(insulating_initial)*1j/numpy.array(dt.ws)
         dt.Sigmakw['up'][:,:,:] = U/2.0
+        numpy.transpose(dt.Sigmakw['up'])[:] -= int(insulating_initial)*1j/numpy.array(dt.ws)
         for K, sig in dt.SigmaK_iw:
-          sig[0,0] << U/2.0
+          #sig[0,0] << U/2.0
+          sig.data[:,0,0] = U/2.0-int(insulating_initial)*1j/numpy.array(dt.ws)
           fit_fermionic_sigma_tail(sig)
       dt.dump_general( quantities = ['Sigmakw','SigmaK_iw','Sigma_imp_iw'], suffix='-initial' )  
 

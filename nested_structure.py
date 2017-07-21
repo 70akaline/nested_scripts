@@ -190,16 +190,16 @@ def get_tex_from_identical_pair_sets(Lx,Ly,ips):
     tex+="\\end{array} \n"            
     tex+="} \\\\ \\nonumber \n"            
     for eg in cips:
-        tex+="&\{& "
+        tex+="&\{\;\;& "
         counter = 0
         for p in eg:
             tex+="("+str(p[0])+","+str(p[1])+")"
             if p!=eg[-1]: tex+=",\;"
             counter +=1
-            if counter==10 and not (p==eg[-1]):
+            if counter==6 and not (p==eg[-1]):
                 counter =0
                 tex+=" \\\\ \\nonumber && \n"                        
-        tex+="\;\;\;\} \\\\ \\nonumber \n"    
+        tex+="\;\;\} \\\\ \\nonumber \n"    
     tex += "\\end{eqnarray}\n"  
     return tex
 
@@ -417,7 +417,7 @@ class contribution():
         else: sgnp = "+"
             
         if self.sites_contained==[]:
-            spscr ="\mathrm{imp}(%s\\times %s)"%(self.Lx, self.Ly)
+            spscr ="\mathrm{imp}\,%s\\times %s"%(self.Lx, self.Ly)
         else:
             spscr = "\mathrm{imp}"
             for s in self.sites_contained:
@@ -802,7 +802,7 @@ class nested_struct:
                     else: lbl+=" \\\\\n"
           lbl+="\\end{array} \n } \n" 
           counter += 1 
-          if counter==4 and C!=struct.keys()[-1]:
+          if counter==3 and C!=struct.keys()[-1]:
             lbl+="\\\\ \\nonumber &&"     
             counter=0
           elif C!=struct.keys()[-1]: lbl+="\;\;\;"
@@ -817,7 +817,7 @@ class nested_struct:
                     for c in self.contribs[key]:                         
                         lbl += c.get_tex()
                         counter+=1
-                        if counter==4 and c!=self.contribs[key][-1]: 
+                        if counter==3 and c!=self.contribs[key][-1]: 
                           counter=0
                           lbl += "\\\\ \\nonumber &&\n"     
                     lbl += "\\\\ \\nonumber \n"    

@@ -19,6 +19,27 @@ def impose_real_valued_in_imtime_numpy(Q):
 def impose_real_valued_in_imtime(Q):
   impose_real_valued_in_imtime_numpy(Q.data)
 
+def impose_particle_hole_symmetry(Qimpdata, tail=0.0): #set to U/2 for sigma
+  print "imposing particle hole symmetry..."
+  sha = numpy.shape(Qimpdata)
+  nsites = sha[2]
+  L = int(numpy.sqrt(nsites))
+  print "nsites:",nsites," L:",L,"tail:",tail
+  for i in range(nsites):
+    Qimpdata[:,i,i] -= Qimpdata[:,i,i].real
+    Qimpdata[:,i,i] += tail
+  
+  for i in range(nsites-1):
+    for j in range(i+1,nsites):                
+      rx = abs(i%L - j%L)
+      ry = abs(i/L - j/L)
+      #print "i,j:",i,j,"rx,ry:",rx,ry,"(rx+ry)%2",(rx+ry)%2 
+      if (rx+ry)%2==0: XX = numpy.real
+      else: XX = numpy.imag  
+      Qimpdata[:,i,j] -= XX(Qimpdata[:,i,j])    
+      Qimpdata[:,j,i] -= XX(Qimpdata[:,j,i])
+  impose_real_valued_in_imtime_numpy(Qimpdata)
+
 def nonloc_sign_cautionary(Q, clip_value = 0.0, desired_sign = -1, clip_off = False, real_or_imag = 'imag'):
       clip_off = clip_off and not (real_or_imag=='imag')
       clipped = False

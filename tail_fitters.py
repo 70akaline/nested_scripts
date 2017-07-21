@@ -11,7 +11,7 @@ import pytriqs.utility.mpi as mpi
 
 import copy
 
-def fit_fermionic_sigma_tail(Q, starting_iw=14.0, no_hartree=False, no_loc=False):
+def fit_fermionic_sigma_tail(Q, starting_iw=14.0, no_hartree=False, no_loc=False, max_order=5, overwrite_tail=True):
   Nc = len(Q.data[0,:,0])    
   if no_loc:
     known_coeff = TailGf(Nc,Nc,3,-1)
@@ -27,17 +27,25 @@ def fit_fermionic_sigma_tail(Q, starting_iw=14.0, no_hartree=False, no_loc=False
     known_coeff[-1] = numpy.zeros((Nc,Nc),dtype=numpy.complex)
   nmax = Q.mesh.last_index()
   nmin = int(((starting_iw*Q.beta)/math.pi-1.0)/2.0) 
-  Q.fit_tail(known_coeff,5,nmin,nmax, True)
+  before = Q.data[-1,0,0]
+  Q.fit_tail(known_coeff,max_order,nmin,nmax, overwrite_tail)  
+  if (Q.data[-1,0,0]==before) and overwrite_tail:
+    print "fit_fermionic_sigma_tail: WARNING: negative part of the tail may not have been overwritten!!!"
 
-def fit_fermionic_gf_tail(Q, starting_iw=14.0):
+def fit_fermionic_gf_tail(Q, starting_iw=14.0, no_loc=False, overwrite_tail=False, max_order=5):
   Nc = len(Q.data[0,0,:])
-  known_coeff = TailGf(Nc,Nc,3,-1)
-  known_coeff[-1] = zeros((Nc,Nc))#array([[0.]])
-  known_coeff[0] = zeros((Nc,Nc))#array([[0.]])
-  known_coeff[1] = identity(Nc)
+  if no_loc:
+    known_coeff = TailGf(Nc,Nc,2,-1)
+    known_coeff[-1] = zeros((Nc,Nc))#array([[0.]])
+    known_coeff[0] = zeros((Nc,Nc))#array([[0.]])
+  else:
+    known_coeff = TailGf(Nc,Nc,3,-1)
+    known_coeff[-1] = zeros((Nc,Nc))#array([[0.]])
+    known_coeff[0] = zeros((Nc,Nc))#array([[0.]])
+    known_coeff[1] = identity(Nc)
   nmax = Q.mesh.last_index()
   nmin = int(((starting_iw*Q.beta)/math.pi-1.0)/2.0) 
-  Q.fit_tail(known_coeff,5,nmin,nmax)
+  Q.fit_tail(known_coeff,max_order,nmin,nmax, overwrite_tail)
 
 def fit_and_remove_constant_tail(Q, starting_iw=14.0, max_order = 5):
   Nc = len(Q.data[0,0,:])

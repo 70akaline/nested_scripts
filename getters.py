@@ -492,14 +492,14 @@ def IBZ_convolution(Q, nK):
         return Qp/n_k_in_K**2
    
 from data_containers import IBZ
-def Richardson_Lucy(Qtarget, Q, nK, n_iterations = 5, accr=1e-5):
+def Richardson_Lucy(Qtarget, Q, nK, n_iterations = 5, accr=1e-5, desired_loc=None, impose_ph_symmetry=False):
     print "----------- Richardson Lucy --------------"
     nk = len(Q[0,:,0])
     ReQ, ImQ, ReQloc, ImQloc, ReQtilde, ImQtilde = full_decompose(Q)
     ReQt, ImQt, ReQtloc, ImQtloc, ReQttilde, ImQttilde = full_decompose(Qtarget)
         
     for q, qt in [(ReQ, ReQt), (ImQ,ImQt)]:        
-        print "----------- Doing %s part"%("real" if q is ReQ else "imag")  
+        print "----------- Doing %s part%s"%(("real" if q is ReQ else "imag"),(", imposing ph-symmetry" if impose_ph_symmetry else ""))
         for it in range(n_iterations):
             print "------ it: ",it
             Qp = IBZ_convolution(q, nK)
@@ -510,6 +510,36 @@ def Richardson_Lucy(Qtarget, Q, nK, n_iterations = 5, accr=1e-5):
             Qpp = IBZ_convolution(Qw, nK)
             q *= Qpp
             IBZ.copy_by_symmetry(numpy.transpose(q)[:,:,:])
+
+            qloc = numpy.sum(q,axis=(1,2))/nk**2
+            if q is ReQ: XX=numpy.real
+            if q is ImQ: XX=numpy.imag
+            numpy.transpose(q)[:,:,:] += XX(desired_loc) - qloc 
+
+            if impose_ph_symmetry:
+              nw = len(Q[:,0,0])
+
+              if q is ReQ:
+                qloc = numpy.sum(q,axis=(1,2))/nk**2
+                numpy.transpose(q)[:,:,:] -= qloc
+
+              c1 = q[:,:nk/2,:nk/2].copy()
+              c2 = q[:,nk/2:,nk/2:].copy()
+              c3 = q[:,:nk/2,nk/2:].copy()
+              c4 = q[:,nk/2:,:nk/2].copy()
+
+              sgn=1.0 
+              if q is ReQ: sgn=-1.0
+
+              q[:,:nk/2,:nk/2]+=sgn*c2
+              q[:,nk/2:,nk/2:]+=sgn*c1
+              q[:,:nk/2,nk/2:]+=sgn*c4
+              q[:,nk/2:,:nk/2]+=sgn*c3
+
+              q/=2.0
+              if q is ReQ:             
+                numpy.transpose(q)[:,:,:] += qloc
+
             diff = numpy.linalg.norm(IBZ_convolution(q, nK)-qt)/numpy.linalg.norm(qt)            
             print "diff: ", diff
             if diff < accr: 
@@ -517,8 +547,10 @@ def Richardson_Lucy(Qtarget, Q, nK, n_iterations = 5, accr=1e-5):
               break             
   
     Q[:,:,:] = ReQ+1j*ImQ
-    Qloc = numpy.sum(Q,axis=(1,2))/nk**2
-    numpy.transpose(Q)[:,:,:] += ReQtloc + 1j*ImQtloc - Qloc #enforce the correct local part
+    if not (desired_loc is None):
+      Qloc = numpy.sum(Q,axis=(1,2))/nk**2
+      numpy.transpose(Q)[:,:,:] += desired_loc - Qloc 
+      #numpy.transpose(Q)[:,:,:] += ReQtloc + 1j*ImQtloc - Qloc #enforce the correct local part ### WRONG!!!
 
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------#

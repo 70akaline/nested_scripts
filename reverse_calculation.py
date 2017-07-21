@@ -18,7 +18,7 @@ from copy import deepcopy
 from nested_scripts import *
 
 
-def reverse_calculation( clusters, nested_struct_archive_name = None, sign=-1, sign_up_to=2, fit_bath = False,
+def reverse_calculation( clusters, nested_struct_archive_name = None, sign=-1, sign_up_to=2, fit_bath = False, Cs=[],
                         U = 1.0,
                         T = 0.125, 
                         n = 0.5, ph_symmetry = False,
@@ -94,8 +94,8 @@ def reverse_calculation( clusters, nested_struct_archive_name = None, sign=-1, s
   dt = nested_data(  n_iw = n_iw, 
                      n_k = n_k, 
                      beta = beta, 
-                     impurity_struct = impurity_struct,
-                     fermionic_struct = fermionic_struct,
+                     impurity_struct = deepcopy(impurity_struct),
+                     fermionic_struct = deepcopy(fermionic_struct),
                      archive_name="so_far_nothing_you_shouldnt_see_this_file"  )
 
   filename = "result.h5"
@@ -105,10 +105,21 @@ def reverse_calculation( clusters, nested_struct_archive_name = None, sign=-1, s
   nested_scheme.set_nk(nk) #don't forget this part
 
   prepare = prepare_nested
-  flexible_Gweiss = True
+  flexible_Gweiss = False
   prepare( dt, nested_scheme, solver_class, flexible_Gweiss, sign, sign_up_to )
 
+
+  if Cs!=[]: 
+    old_impurity_struct = deepcopy(dt.impurity_struct)
+    print dt.impurity_struct
+    for C in dt.impurity_struct.keys():
+      if not (C in Cs):
+        del dt.impurity_struct[C]
+    print dt.impurity_struct      
   solver_class.initialize_solvers( dt, solver_data_package )
+  if Cs!=[]: 
+    dt.impurity_struct = old_impurity_struct
+    print dt.impurity_struct
 
   if mpi.is_master_node():
       print "Working: U: %s T %s n_k: %s n_iw: %s"%(U,T,nk,n_iw)   
@@ -124,7 +135,7 @@ def reverse_calculation( clusters, nested_struct_archive_name = None, sign=-1, s
                               ),
               generic_action(  name = "impurity",
                   main = (lambda data: nested_mains.impurity(data, U, symmetrize_quantities = True, alpha=alpha, delta=delta, automatic_alpha_and_delta = automatic_alpha_and_delta, 
-                                                             n_cycles=n_cycles, max_times = max_times, solver_data_package = solver_data_package )),
+                                                             n_cycles=n_cycles, max_times = max_times, solver_data_package = solver_data_package, Cs = Cs )),
                   mixers = [], cautionaries = [lambda data,it: local_nan_cautionary(data, data.impurity_struct, Qs = ['Sigma_imp_iw'], raise_exception = True),                                                 
                                                lambda data,it: ( symmetric_G_and_self_energy_on_impurity(data.G_imp_iw, data.Sigma_imp_iw, data.solvers, 
                                                                                                          identical_pairs_Sigma, identical_pairs_G,
@@ -197,7 +208,8 @@ def reverse_calculation( clusters, nested_struct_archive_name = None, sign=-1, s
             min_its=min_its,
             max_it_err_is_allowed = 7,
             print_final=False, 
-            print_current = 10000 )
+            print_current = 10000,
+            start_from_action_index = 1 )
   if mpi.is_master_node():
     dt.get_Sigmaijw()
     dt.get_Sigmakw()

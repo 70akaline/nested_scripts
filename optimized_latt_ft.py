@@ -19,14 +19,15 @@ from tail_fitters import fit_fermionic_gf_tail
 
 ##################### inverse temporal ########################
 
-def invf(Qw, beta, ntau, n_iw, statistic, fit_tail, fit_tail_like_sigma=False):
+def invf(Qw, beta, ntau, n_iw, statistic, fit_tail, fit_tail_like_sigma=False, no_loc=True):
   g = GfImFreq(indices = [0], beta = beta, n_points = n_iw, statistic=statistic)
   gtau = GfImTime(indices = [0], beta = beta, n_points = ntau, statistic=statistic)    
   g.data[:,0,0] = Qw[:]
   if fit_tail:
     assert statistic == 'Fermion', "no tail fiting for bosonic functions!"
     if fit_tail_like_sigma:
-      fit_fermionic_sigma_tail(g, starting_iw=10.0, no_hartree=True, no_loc=True)
+      fit_and_remove_constant_tail(sig, starting_iw=14.0, max_order = 5)
+      fit_fermionic_sigma_tail(g, starting_iw=(10.0 if no_loc else 14.0), no_hartree=True, no_loc=no_loc)
     else:
       fit_fermionic_gf_tail(g) ############# !!!!!!!!!! add the bosonic option
   gtau << InverseFourier(g)
@@ -36,7 +37,7 @@ def invf_(tup):
   return invf(*tup)
 
 
-def temporal_inverse_FT_single_core(Qkw, beta, ntau, n_iw, nk, statistic='Fermion', use_IBZ_symmetry = True, fit_tail = False):        
+def temporal_inverse_FT_single_core(Qkw, beta, ntau, n_iw, nk, statistic='Fermion', use_IBZ_symmetry = True, fit_tail = False, fit_tail_like_sigma = False, no_loc=True):        
   if mpi.is_master_node(): print "temporal_inverse_FT_single core"
   Qktau = numpy.zeros((ntau,nk,nk), dtype=numpy.complex_)
         
@@ -45,7 +46,7 @@ def temporal_inverse_FT_single_core(Qkw, beta, ntau, n_iw, nk, statistic='Fermio
   for kxi in range(max_kxi):                    
     if use_IBZ_symmetry: max_kyi = nk/2+1
     else: max_kyi = nk
-    numpy.transpose(Qktau[:,kxi,:])[0:max_kyi,:] =  [ invf( Qkw[:,kxi,kyi], beta, ntau, n_iw, statistic, fit_tail )\
+    numpy.transpose(Qktau[:,kxi,:])[0:max_kyi,:] =  [ invf( Qkw[:,kxi,kyi], beta, ntau, n_iw, statistic, fit_tail, fit_tail_like_sigma, no_loc )\
                                                         for kyi in range(max_kyi)] 
   if use_IBZ_symmetry: 
     for taui in range(ntau):
@@ -53,7 +54,7 @@ def temporal_inverse_FT_single_core(Qkw, beta, ntau, n_iw, nk, statistic='Fermio
   return Qktau
 
 
-def temporal_inverse_FT(Qkw, beta, ntau, n_iw, nk, statistic='Fermion', use_IBZ_symmetry = True, fit_tail = False, N_cores=1, fit_tail_like_sigma = False):        
+def temporal_inverse_FT(Qkw, beta, ntau, n_iw, nk, statistic='Fermion', use_IBZ_symmetry = True, fit_tail = False, N_cores=1, fit_tail_like_sigma = False, no_loc=True):        
   if N_cores==1: return temporal_inverse_FT_single_core(Qkw, beta, ntau, n_iw, nk, statistic, use_IBZ_symmetry, fit_tail)
   if mpi.is_master_node(): print "temporal_inverse_FT, N_cores: ",N_cores
   Qktau = numpy.zeros((ntau,nk,nk), dtype=numpy.complex_)
@@ -66,7 +67,7 @@ def temporal_inverse_FT(Qkw, beta, ntau, n_iw, nk, statistic='Fermion', use_IBZ_
     else: max_kyi = nk
     numpy.transpose(Qktau[:,kxi,:])[0:max_kyi,:] = pool.map(invf_,
                                                       [( Qkw[:,kxi,kyi],
-                                                         beta, ntau, n_iw, statistic, fit_tail, fit_tail_like_sigma
+                                                         beta, ntau, n_iw, statistic, fit_tail, fit_tail_like_sigma, no_loc
                                                         )\
                                                         for kyi in range(max_kyi)])  
   pool.close()      

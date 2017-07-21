@@ -3,10 +3,6 @@ from pytriqs.lattice.bz_patch import *
 from pytriqs.dos.hilbert_transform import *
 import pytriqs.utility.mpi as mpi
 
-from pytriqs.plot.mpl_interface import *
-
-from matplotlib.patches import Polygon
-
 import numpy as np
 from numpy import pi
 import numpy.linalg
@@ -399,6 +395,10 @@ class dca_struct:
         assert found, "there has to be a zero real space vector" 
     
     def plot_r_points(self, plt):        
+        from pytriqs.plot.mpl_interface import *
+        from matplotlib.patches import Polygon
+
+
         r_points, R1, R2, d1, d2 = self.r_points, self.R1, self.R2, self.d1, self.d2
         
         x_min = min(0, R1[0], R2[0], (R1+R2)[0])
@@ -426,7 +426,11 @@ class dca_struct:
         plt.legend(bbox_to_anchor=(1.5,1.0))
         plt.show() 
 
-    def plot_k_points(self, plt):      
+    def plot_k_points(self, plt):
+        from pytriqs.plot.mpl_interface import *
+        from matplotlib.patches import Polygon
+
+      
         fig, ax = plt.subplots()
 
         b1, b2 = self.b1, self.b2

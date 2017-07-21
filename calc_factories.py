@@ -49,7 +49,7 @@ def prepare_nested( data, nested_scheme, solver_class = solvers.ctint, flexible_
   else:
     data.get_Gweiss = lambda: full_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw(data.Gweiss_iw,data.Gijw,data.Sigma_imp_iw, mapping = nested_scheme.get_imp_to_latt_mapping())  
 
-  data.dump_solvers = lambda suffix: [solver_class.dump( data.solvers[C], data.archive_name, suffix='-%s%s'%(C,suffix) ) for C in data.impurity_struct.keys()]
+  data.dump_solvers = lambda suffix: [solver_class.dump( data.solvers[C], data.archive_name, suffix='-%s%s'%(C,suffix) ) for C in data.solvers.keys()]
 
 #----------------------------- cumul_nested -----------------------------------------------------------------------#
 def prepare_cumul_nested( data, nested_scheme, solver_class = solvers.ctint  ):
@@ -106,12 +106,12 @@ def prepare_dca( data, dca_scheme, solver_class = solvers.ctint ):
   data.get_GweissR = lambda: dca_scheme.get_QR_from_QK(data.GweissR_iw, data.GweissK_iw)
   data.get_Gweiss_iw = lambda: dca_scheme.get_Q_imp_from_QR(data.Gweiss_iw, data.GweissR_iw)
 
-  data.get_Gweiss = lambda: [data.get_GweissK(), data.get_GweissR(), data.get_Gweiss_iw()]
+  data.get_Gweiss = lambda: [data.get_GweissK(), data.get_GweissR(), data.get_Gweiss_iw(), [impose_real_valued_in_imtime(g) for name,g in data.Gweiss_iw] ]
 
   data.dump_solvers = lambda suffix: [solver_class.dump( data.solvers[C], data.archive_name, suffix='-%s%s'%(C,suffix) ) for C in data.impurity_struct.keys()]
 
 #----------------------------- dca_plus -----------------------------------------------------------------------#
-def prepare_dca_plus( data, dca_scheme, solver_class = solvers.ctint, alpha = 1, n_RL_iterations = 10, embedded = False, real_space_sc = False, no_convolution = False ):
+def prepare_dca_plus( data, dca_scheme, solver_class = solvers.ctint, alpha = 1, n_RL_iterations = 10, embedded = False, real_space_sc = False, no_convolution = False, impose_ph_symmetry = False ):
   assert len(data.impurity_struct.keys()) == 1, "in dca only one impurity problem!!" 
   key = data.impurity_struct.keys()[0]
   assert len(data.impurity_struct[key]) == dca_scheme.dim, "wrong impurity struct for the dca calculation!" 
@@ -122,20 +122,24 @@ def prepare_dca_plus( data, dca_scheme, solver_class = solvers.ctint, alpha = 1,
   assert dca_scheme.n1 == dca_scheme.n1 and dca_scheme.m1==0 and dca_scheme.n2==0, "not general for now..."  
   assert nK**2 == dca_scheme.dim, "must be n1==m2, n2==m1==0"
 
-  data.get_SigmaR = lambda: [ full_fill_SigmaR_iw_from_Sigma_imp_iw(data.SigmaR_iw, data.Sigma_imp_iw, lambda i: dca_scheme.i_to_ij(i)), dca_scheme.symmetrize_QR(data.SigmaR_iw) ]
+  #data.get_SigmaR = lambda: [ full_fill_SigmaR_iw_from_Sigma_imp_iw(data.SigmaR_iw, data.Sigma_imp_iw, lambda i: dca_scheme.i_to_ij(i)), dca_scheme.symmetrize_QR(data.SigmaR_iw) ]
+  data.get_SigmaR = lambda: [ dca_scheme.get_QR_from_Q_imp(data.SigmaR_iw, data.Sigma_imp_iw) ]
   data.get_SigmaK = lambda: dca_scheme.get_QK_from_QR(data.SigmaK_iw, data.SigmaR_iw)
+
+  r0 = dca_scheme.get_r0()
+  r0_key = '%02d'%r0
 
   data.get_XiK = lambda: fill_XiK_from_SigmaK(data.XiK_iw, data.SigmaK_iw, alpha)
   data.get_XiR = lambda: dca_scheme.get_QR_from_QK(data.XiR_iw, data.XiK_iw)
-
   if not embedded:
     data.get_Xik = lambda: dca_scheme.get_Qk_from_QR(data.Xikw['up'], data.XiR_iw, data.ks)
-    data.get_Sigmaimpk = lambda: [ blockwise_Sigmak_from_Xik(data.Sigmaimpkw['up'], data.Xikw['up'], alpha),
-                                   impose_real_valued_in_imtime_numpy(data.Sigmaimpkw['up'][:,:,:]) ]
+    data.get_Sigmaimpk = lambda: blockwise_Sigmak_from_Xik(data.Sigmaimpkw['up'], data.Xikw['up'], alpha)
     if not no_convolution:
       data.get_Sigmakw = lambda: [ numpy.copyto(data.Sigmakw['up'], data.Sigmaimpkw['up']),
-                                   Richardson_Lucy(data.Sigmaimpkw['up'], data.Sigmakw['up'], nK, n_iterations = n_RL_iterations),
-                                   impose_real_valued_in_imtime_numpy(data.Sigmakw['up'][:,:,:]) ]
+                                   Richardson_Lucy(data.Sigmaimpkw['up'], data.Sigmakw['up'], 
+                                                   nK, n_iterations = n_RL_iterations, 
+                                                   desired_loc=data.SigmaR_iw[r0_key].data[:,0,0],
+                                                   impose_ph_symmetry=impose_ph_symmetry) ]
     else:
       data.get_Sigmakw = lambda: numpy.copyto(data.Sigmakw['up'], data.Sigmaimpkw['up']) 
 
@@ -158,12 +162,12 @@ def prepare_dca_plus( data, dca_scheme, solver_class = solvers.ctint, alpha = 1,
     data.get_Gijw = lambda: [data.get_GK(), [fit_fermionic_gf_tail(g) for name,g in data.GK_iw], data.get_GR()]
   else:
     data.get_Gijw = lambda: full_fill_Gijw_from_Gkw(data.Gijw, data.Gkw, N_cores=1)
-    data.get_GR = lambda: Qrw_to_QR_iw(data.GR_iw, data.Gijw)
-    data.get_GK = lambda: get_QK_from_QR(data.GK_iw, data.GR_iw)    
+    data.get_GR = lambda: dca_scheme.Qrw_to_QR_iw(data.GR_iw, data.Gijw)
+    data.get_GK = lambda: dca_scheme.get_QK_from_QR(data.GK_iw, data.GR_iw)    
 
   data.get_GweissK = lambda: full_fill_GweissK_iw_from_Dyson(data.GweissK_iw, data.GK_iw, data.SigmaK_iw)
-  data.get_GweissR = lambda: full_fill_GweissR_iw_from_GweissK_iw(data.GweissR_iw, data.GweissK_iw, dca_scheme.P, dca_scheme.Pinv)
-  data.get_Gweiss_iw = lambda: full_fill_Gweiss_iw_from_GweissR_iw(data.Gweiss_iw, data.GweissR_iw, dca_scheme.ij_to_0i)
+  data.get_GweissR = lambda: dca_scheme.get_QR_from_QK(data.GweissR_iw, data.GweissK_iw)
+  data.get_Gweiss_iw = lambda: dca_scheme.get_Q_imp_from_QR(data.Gweiss_iw, data.GweissR_iw)
 
   data.get_Gweiss = lambda: [data.get_GweissK(), data.get_GweissR(), dca_scheme.symmetrize_QR(data.GweissR_iw), data.get_Gweiss_iw()]
 
@@ -172,6 +176,8 @@ def prepare_dca_plus( data, dca_scheme, solver_class = solvers.ctint, alpha = 1,
 #----------------------------- celullar -----------------------------------------------------------------------#
 
 def prepare_cellular( data, Lx, Ly, solver_class = solvers.ctint, periodized = False  ):
+  print "prepare_cellular"
+
   assert data.__class__ == cellular_data, "wrong data type"
   assert data.fermionic_struct == {'up': [0]}, "wrong fermionic struct for this calcalation"
   assert len(data.impurity_struct.keys()) == 1, "in celullar we solve only one cluster" 
@@ -204,6 +210,7 @@ def prepare_cellular( data, Lx, Ly, solver_class = solvers.ctint, periodized = F
 #----------------------------- triangular celullar -----------------------------------------------------------------------#
 
 def prepare_cellular_triangular( data, Lx, Ly, solver_class = solvers.ctint, periodized = False  ):
+  print "prepare_cellular_triangular"
   prepare_cellular( data, Lx, Ly, solver_class, periodized )  
 
   if periodized:

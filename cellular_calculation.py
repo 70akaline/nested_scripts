@@ -20,7 +20,7 @@ from nested_structure import get_identical_pair_sets
 
 
 def cellular_calculation( Lx=2, Ly=1, periodized = False,
-                          triangluar = False, 
+                          triangular = False, 
                           Us = [1.0],
                           Ts = [0.125], 
                           ns = [0.5], fixed_n = True,
@@ -39,6 +39,7 @@ def cellular_calculation( Lx=2, Ly=1, periodized = False,
                           accuracy = 1e-4, 
                           solver_data_package = None,
                           print_current = 1,
+                          insulating_initial = False,
                           initial_guess_archive_name = '', suffix='', start_from_Gweiss = False):
 
   if mpi.is_master_node():
@@ -251,10 +252,10 @@ def cellular_calculation( Lx=2, Ly=1, periodized = False,
         if 'down' in dt.fermionic_struct.keys(): dt.mus['down'] = dt.mus['up']   #this is not necessary at the moment, but may become
         for C in dt.impurity_struct.keys():
           for l in dt.impurity_struct[C]: #just the local components (but on each site!)         
-            dt.Sigma_imp_iw[C].data[:,l,l] = U/2.0
+            dt.Sigma_imp_iw[C].data[:,l,l] =  U/2.0-int(insulating_initial)*1j/numpy.array(dt.ws)
         for key in fermionic_struct.keys(): 
           for l in range(dt.Nc):
-            dt.Sigmaijkw[key][:,l,l,:,:] = U/2.0    
+            numpy.transpose(dt.Sigmaijkw[key])[:,:,l,l,:] =  U/2.0-int(insulating_initial)*1j/numpy.array(dt.ws)   
         dt.dump_general( quantities = ['Sigmaijkw','Sigma_imp_iw'], suffix='-initial' )  
 
     if (counter==0) and do_dmft_first:
