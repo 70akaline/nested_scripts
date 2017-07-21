@@ -3,6 +3,7 @@ from data_containers import cumul_nested_data
 from data_containers import cellular_data
 from data_containers import dca_data
 from data_containers import dca_plus_data
+from data_containers import nested_edmft_data
 from action_cautionaries import impose_real_valued_in_imtime_numpy
 from action_cautionaries import impose_real_valued_in_imtime
 from getters import *
@@ -61,9 +62,9 @@ def prepare_nested_edmft( data, nested_scheme, solver_class = solvers.ctint):
   data.get_P_loc = lambda: full_fill_local_from_latt(data.P_loc_iw, data.Pqnu)
 
   data.get_W_imp = lambda: fill_W_imp_from_chi_imp_and_Uweiss( data.W_imp_iw, data.chi_imp_iw, data.Uweiss_iw)
-  data.get_Wqnu = lambda: full_fill_Wqnu_from_Jq_and_Pqnu(data.Jq,data.Pqnu)
+  data.get_Wqnu = lambda: full_fill_Wqnu_from_Jq_and_Pqnu(data.Wqnu,data.Jq,data.Pqnu)
   data.get_W_loc = lambda: full_fill_local_from_latt(data.W_loc_iw, data.Wqnu)                                    
-  data.get_Wijnu = lambda: full_fill_Gijw_from_Gkw(data.Wijw, data.Wqnu, N_cores=1)
+  data.get_Wijnu = lambda: full_fill_Gijw_from_Gkw(data.Wijnu, data.Wqnu, N_cores=1)
 
   data.get_Uweiss = lambda: [ full_fill_Uweiss_iw_from_Wijnu_and_P_imp_iw(data.Uweiss_iw,data.Wijnu,data.P_imp_iw, mapping = nested_scheme.get_imp_to_latt_mapping()),
                               fill_Uweiss_dyn_from_Uweiss(data.Uweiss_dyn_iw,data.Uweiss_iw) ]

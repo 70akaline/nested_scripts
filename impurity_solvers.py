@@ -54,8 +54,8 @@ class solvers:
           n_tau=1000
       assert n_tau>2*data.n_iw, "solvers.ctint.initialize_solvers: ERROR! n_tau too small!!" 
 
-      n_tau_b = (5 if (not bosonic_measures) else n_iw*4)
-      n_iw_b = (1 if (not bosonic_measures) else n_iw)
+      n_tau_b = (5 if (not bosonic_measures) else data.n_iw*4)
+      n_iw_b = (1 if (not bosonic_measures) else data.n_iw)
       solver_data_package['impurity_struct'] = data.impurity_struct
       solver_data_package['constructor_parameters']={}
       solver_data_package['constructor_parameters']['beta'] = data.beta
@@ -79,6 +79,11 @@ class solvers:
         solver_struct = {'up': data.impurity_struct[C], 'dn': data.impurity_struct[C]}  
         solver_data_package['constructor_parameters']['gf_struct'] = solver_struct
         data.solvers[C] = Solver( **solver_data_package['constructor_parameters'] )
+
+      #print "data.n_iw:",data.n_iw
+      #print "len(chi_imp)",len(data.chi_imp_iw['1x1|0'].data[:,0,0])
+      #print "len(chi_imp)",len(data.solvers['1x1'].nn_iw['up|up'].data[:,0,0])
+
 
     @staticmethod
     def run(data, C, U, symmetrize_quantities=True, alpha=0.5, delta=0.1, n_cycles=20000, max_time = 5*60, solver_data_package = None, only_sign = False, bosonic_measures = False ):

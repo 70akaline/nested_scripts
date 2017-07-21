@@ -141,6 +141,16 @@ def symmetrize_blockgf(Q):
   Q << Qcopy
   del Qcopy
 
+def selective_symmetrize_blockgf(Q, blocks):
+  Qcopy = Q[blocks[0]].copy()
+  Qcopy << 0.0
+  for key in blocks:
+    Qcopy += Q[key]
+  Qcopy /= len(blocks)
+  for key in blocks:
+    Q[key] << Qcopy
+  del Qcopy
+
 def selective_symmetrize_blockmatrix(Q, blocks):
   Qcopy = Q[blocks[0]].copy()
   Qcopy[:,:] = 0.0

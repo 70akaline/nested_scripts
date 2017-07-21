@@ -69,7 +69,8 @@ def local_nan_cautionary(data, struct, Qs = [], raise_exception = True):
 
 def symmetrize_cluster_impurity_bosonic(Q_imp_iw, identical_pairs, name="quantity"):
   err = False
-  for (C,A),Q in Q_imp_iw:
+  for CA,Q in Q_imp_iw:
+    C,A = CA.rsplit("|")[0],CA.rsplit("|")[1]
     for ips in identical_pairs[C]:
       total = deepcopy(Q.data[:,0,0])
       total[:] = 0.0   

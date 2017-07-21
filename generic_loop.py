@@ -179,6 +179,7 @@ class mixer:
     self.get_initial()
 
   def mix_block_gf(self, ratio):
+    if mpi.is_master_node(): print "mixer: ratio:",ratio
     for name, m in self.mq():
       m << ratio*self.mq_old[name] + (1.0-ratio)*m
 

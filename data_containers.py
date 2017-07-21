@@ -426,7 +426,7 @@ class local_data(basic_data):
 
   def promote(self,  impurity_struct):
     self.impurity_struct = impurity_struct
-    self.parameters = list(set(self.parameters) + set( ['impurity_struct'] ))
+    self.parameters = list(set(self.parameters) | set( ['impurity_struct'] ))
 
     gs = []
     for C in self.impurity_struct.keys(): 
@@ -500,19 +500,19 @@ class bosonic_local_data(basic_data):
 
   def promote(self,  impurity_struct):
     self.impurity_struct = impurity_struct
-    self.parameters = list(set(self.parameters) + set( ['impurity_struct'] ))
+    self.parameters = list(set(self.parameters) | set( ['impurity_struct'] ))
 
     gs = []
     self.combo_keys = []
     for C in self.impurity_struct.keys(): 
-      for key in bosonic_stuct.keys():
-        combo_keys.append((C,key))
+      for key in self.bosonic_struct.keys():
+        self.combo_keys.append(C+"|"+key)
         gs.append ( GfImFreq(indices = self.impurity_struct[C], beta = self.beta, n_points =self.n_iw, statistic = 'Boson') )     
     self.parameters.extend( ['combo_keys'] )
 
     self.impurity_bosonic_gfs = [ 'W_imp_iw', 'chi_imp_iw', 'P_imp_iw', 'Uweiss_iw','Uweiss_dyn_iw' ]
     for Q in self.impurity_bosonic_gfs:
-       setattr(self,Q,BlockGf(name_list = combo_keys, block_list = gs, make_copies = True))
+       setattr(self,Q,BlockGf(name_list = self.combo_keys, block_list = gs, make_copies = True))
 
     gs = []
     for key in self.bosonic_struct.keys(): 
@@ -560,7 +560,7 @@ class non_local_data(basic_data):
       self.Sigmaijw[U] = numpy.zeros((self.nw, self.n_k, self.n_k), dtype=numpy.complex_)
       self.Gijw[U] = numpy.zeros((self.nw, n_k, n_k), dtype=numpy.complex_)
 
-    self.parameters = list(set(self.parameters)+set(['ks','n_k']))
+    self.parameters = list(set(self.parameters) | set(['ks','n_k']))
     self.non_interacting_quantities.extend([ 'epsilonk', 'G0kw'] )
 
     new_fermionic = [ 'Gkw', 'Sigmakw', 'Gijw', 'Sigmaijw' ]
@@ -631,7 +631,7 @@ class bosonic_non_local_data(basic_data):
     self.ks = IBZ.k_grid(n_k)
     self.Jq = {}
     for A in self.bosonic_struct.keys():
-      self.Jq[U] = numpy.zeros((n_k, n_k), dtype=numpy.complex_)
+      self.Jq[A] = numpy.zeros((n_k, n_k), dtype=numpy.complex_)
     self.non_interacting_quantities.extend([ 'Jq' ] )
 
     self.non_local_bosonic_gfs = [ 'Pqnu', 'Wqnu', 'Pijnu', 'Wijnu' ]
@@ -641,7 +641,7 @@ class bosonic_non_local_data(basic_data):
         if mpi.is_master_node(): print "constructing",Q, "block: ", A
         getattr(self,Q)[A] = numpy.zeros((self.nnu, self.n_k, self.n_k), dtype=numpy.complex_)     
 
-    self.parameters = list(set(self.parameters)+set(['ks','n_k']))
+    self.parameters = list(set(self.parameters) | set(['ks','n_k']))
     self.non_local_quantities.extend( self.non_local_bosonic_gfs )
 
 #-------------------------------nested data ------------------------------#
@@ -669,7 +669,7 @@ class nested_edmft_data(local_data,non_local_data,bosonic_local_data, bosonic_no
                      fermionic_struct = {'up': [0]},
                      bosonic_struct = {'0': [0]},
                      archive_name="dmft.out.h5"):
-    basic_data.__init__(self, n_iw, beta, fermionic_struct, bosonic_data, archive_name)
+    basic_data.__init__(self, n_iw, beta, fermionic_struct, bosonic_struct, archive_name)
     local_data.promote(self, impurity_struct)
     non_local_data.promote(self, n_k)
     bosonic_local_data.promote(self, impurity_struct)

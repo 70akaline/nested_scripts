@@ -6,6 +6,8 @@ import pytriqs.utility.mpi as mpi
 import numpy
 from amoeba import *
 from impurity_solvers import solvers
+from tail_fitters import fit_bosonic_tail
+from action_cautionaries import symmetrize_cluster_impurity_bosonic
 
 class nested_mains:
   @staticmethod 
@@ -185,11 +187,12 @@ class nested_edmft_mains:
     data.get_W_loc()
 
   @classmethod
-  def extract_chi_imp_from_solver(data, su2_symmetry=False): #this function doesn't belong here. move it to file with formulas
+  def extract_chi_imp_from_solver(cls, data, su2_symmetry=False): #this function doesn't belong here. move it to file with formulas
     for C in data.impurity_struct.keys():
-      for A in data.bosonic_struct.leys():
+      for A in data.bosonic_struct.keys():
+        CA = C+"|"+A
         blocks = [name for name, nn_iw in data.solvers[C].nn_iw]
-        blocks2 = [name for name, nn in data.solvers[C].nn]
+        blocks2 = data.solvers[C].nn.block_names
         assert set(blocks)==set(blocks2), "block structure crap"
         assert 'up|up' in blocks, "wrong solver block structure"
         assert 'dn|dn' in blocks, "wrong solver block structure"
@@ -203,19 +206,19 @@ class nested_edmft_mains:
           sgn = -1
           pref = int(not su2_symmetry)
         if A == '+-': assert False, "not implemented"
-        data.chi_imp_iw[(C,A)] << data.solvers[C].nn_iw['up|up'] \
+        data.chi_imp_iw[CA] << data.solvers[C].nn_iw['up|up'] \
                                 + data.solvers[C].nn_iw['dn|dn'] \
                                 + sgn*data.solvers[C].nn_iw['up|dn'] \
                                 + sgn*data.solvers[C].nn_iw['dn|up']
         for i in data.impurity_struct[C]:
           for j in data.impurity_struct[C]:
-            data.chi_imp_iw[(C,A)].data[data.nnu/2,i,j] -= pref*data.beta\
+            data.chi_imp_iw[CA].data[data.nnu/2,i,j] -= pref*data.beta\
                                                            *(data.solvers[C].nn['up|up'][i,i]+sgn*data.solvers[C].nn['dn|dn'][i,i])\
                                                            *(data.solvers[C].nn['up|up'][j,j]+sgn*data.solvers[C].nn['dn|dn'][j,j])
 
   @classmethod
-  def prepare_Jperp_iw(data, Cs=[]): #takes a single block
-    for C in (data.impurity_struct.keys() if Cs=[] else Cs): 
+  def prepare_Jperp_iw(cls, data, Cs=[]): #takes a single block
+    for C in (data.impurity_struct.keys() if Cs==[] else Cs): 
       data.solvers[C].Jperp_iw << 0.0
   #  Jperp_iw << Uweiss_iw
   #  fixed_coeff = TailGf(1,1,2,-1) #not general for clusters
@@ -226,9 +229,10 @@ class nested_edmft_mains:
   #  Jperp_iw.fit_tail(fixed_coeff, 5, nmin, nmax, True) #!!!!!!!!!!!!!!!1
 
   @classmethod
-  def prepare_D0_iw(data, Cs=[]):
+  def prepare_D0_iw(cls, data, Cs=[]):
+    print "Cs: ",Cs
     blocks = ['up','dn']
-    for C in (data.impurity_struct.keys() if Cs=[] else Cs): 
+    for C in (data.impurity_struct.keys() if Cs==[] else Cs): 
       for bl1 in blocks:
         for bl2 in blocks:
           d0 =  data.solvers[C].D0_iw[bl1+'|'+bl2] 
@@ -237,13 +241,13 @@ class nested_edmft_mains:
             pref = 1.0
             if (bl1!=bl2) and (A=='1'):
               pref *= -1.0        
-            d0 << d0 + pref*data.Uweiss_dyn_iw[(C,A)]
+            d0 << d0 + pref*data.Uweiss_dyn_iw[C+"|"+A]
           fit_bosonic_tail(d0, no_static=True, overwrite_tail=True, max_order=5)
 
   @staticmethod
-  def pre_impurity(data, Cs=[]):
+  def pre_impurity(data, Cs=[], freeze_Uweiss=False):
     nested_mains.pre_impurity(data,Cs)  
-    data.get_Uweiss()    
+    if not freeze_Uweiss: data.get_Uweiss()    
     nested_edmft_mains.prepare_D0_iw(data, Cs)
     nested_edmft_mains.prepare_Jperp_iw(data,Cs)
 

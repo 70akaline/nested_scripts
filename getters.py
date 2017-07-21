@@ -3,6 +3,7 @@ from optimized_latt_ft import temporal_FT
 from optimized_latt_ft import spatial_inverse_FT
 from optimized_latt_ft import temporal_inverse_FT
 from tail_fitters import fit_fermionic_gf_tail
+from tail_fitters import fit_and_remove_constant_tail
 
 
 from pytriqs.operators import *
@@ -262,7 +263,7 @@ def full_fill_Gkw_from_epsiolonk_and_gkw(Gkw, epsilonk, gkw):
     invG -= epsilonk[U]
     Gkw[U][:,:,:] = invG**(-1.0)
 
-def full_fill_Wqnu_from_Jq_and_Pqnu(Jq,Pqnu):
+def full_fill_Wqnu_from_Jq_and_Pqnu(Wqnu,Jq,Pqnu):
   if mpi.is_master_node(): print "full_fill_Wqnu_from_Jq_and_Pqnu"
   for A in Wqnu.keys():
     Wqnu[A][:,:,:] = blockwise_get_Wqnu_from_Jq_and_Pqnu(Jq[A],Pqnu[A])
@@ -283,6 +284,8 @@ def blockwise_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw(Gweiss_iw,Gijw,Sigma_imp
 
   invGtemp = Gtemp[:,:,:]
   for wi in range(nw):
+    #print "in Gweiss fill: wi:",wi
+    #print Gtemp[wi,:,:]
     invGtemp[wi,:,:] = inv(Gtemp[wi,:,:])
     Gweiss_iw.data[wi,:,:] = inv(invGtemp[wi,:,:] + Sigma_imp_iw.data[wi,:,:])
 
@@ -358,20 +361,27 @@ def flexible_Gweiss_iw_from_Gweiss_iw_Gijw_and_G_imp_iw(Gweiss_iw, Gijw, G_imp_i
 #-----------------------------------------------------------------------------------------------------------------------------------------------#
 
 def fill_W_imp_from_chi_imp_and_Uweiss( W_imp_iw, chi_imp_iw, Uweiss_iw):
+  if mpi.is_master_node(): print "fill_W_imp_from_chi_imp_and_Uweiss" 
   for bl, W in W_imp_iw:
     W << Uweiss_iw[bl] - Uweiss_iw[bl]*chi_imp_iw[bl]*Uweiss_iw[bl]
+    #print "W.data[0,0,0]:",W.data[0,0,0]
+    #print "Uweiss_iw[bl].data[0,0,0]:",Uweiss_iw[bl].data[0,0,0]
+    #print "chi_imp_iw[bl].data[0,0,0]:",chi_imp_iw[bl].data[60,0,0]
 
 def fill_P_imp_from_chi_imp_W_imp_and_Uweiss(P_imp_iw, chi_imp_iw, W_imp_iw, Uweiss_iw):
+  if mpi.is_master_node(): print "fill_P_imp_from_chi_imp_W_imp_and_Uweiss" 
   for bl, P in P_imp_iw:
     P << - chi_imp_iw[bl]*Uweiss_iw[bl]*inverse(W_imp_iw[bl])
 
 def full_fill_Uweiss_iw_from_Wijnu_and_P_imp_iw(Uweiss_iw,Wijnu, P_imp_iw, mapping = lambda C,i,j: [0,0]):      
   if mpi.is_master_node(): print "full_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw" 
-  for (C,A),U in Uweiss_iw:
-    blockwise_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw(Uweiss_iw[(C,A)],Wijnu[A],P_imp_iw[(C,A)], mapping= lambda i,j: mapping(C,i,j) ) 
+  for CA,U in Uweiss_iw:
+    C,A = CA.rsplit("|")[0],CA.rsplit("|")[1]
+    blockwise_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw(Uweiss_iw[CA],Wijnu[A],P_imp_iw[CA], mapping= lambda i,j: mapping(C,i,j) ) 
   if mpi.is_master_node(): print "done!"
 
 def fill_Uweiss_dyn_from_Uweiss(Uweiss_dyn_iw, Uweiss_iw ):      
+    if mpi.is_master_node(): print "fill_Uweiss_dyn_from_Uweiss" 
     Uweiss_dyn_iw << Uweiss_iw #prepare the non-static part - static part goes separately in the impurity solver  
     for bl, Uweiss in Uweiss_dyn_iw: 
       fit_and_remove_constant_tail(Uweiss, general=True) 
