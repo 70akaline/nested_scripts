@@ -47,18 +47,38 @@ def fit_fermionic_gf_tail(Q, starting_iw=14.0, no_loc=False, overwrite_tail=Fals
   nmin = int(((starting_iw*Q.beta)/math.pi-1.0)/2.0) 
   Q.fit_tail(known_coeff,max_order,nmin,nmax, overwrite_tail)
 
-def fit_and_remove_constant_tail(Q, starting_iw=14.0, max_order = 5):
+def fit_and_remove_constant_tail(Q, starting_iw=14.0, max_order = 5, general=False):
   Nc = len(Q.data[0,0,:])
   known_coeff = TailGf(Nc,Nc,1,-1)
   known_coeff[-1] = zeros((Nc,Nc))
   nmax = Q.mesh.last_index()
   nmin = int(((starting_iw*Q.beta)/math.pi-1.0)/2.0) 
   Q.fit_tail(known_coeff,max_order,nmin,nmax)
-  for l in range(Nc):
-    tail0 = Q.tail[0][l,l]  
-    Q[l,l] -= tail0
+  if general:
+    for l1 in range(Nc):
+      for l2 in range(Nc):
+        tail0 = Q.tail[0][l1,l2]  
+        Q[l1,l2] -= tail0
+  else:
+    for l in range(Nc):
+      tail0 = Q.tail[0][l,l]  
+      Q[l,l] -= tail0
   Q.fit_tail(known_coeff,max_order,nmin,nmax)
   return tail0
+
+
+def fit_bosonic_tail(Q, starting_iw=14.0, no_static=False, overwrite_tail=False, max_order=5):
+  Nc = len(Q.data[0,0,:])
+  if no_static:
+    known_coeff = TailGf(Nc,Nc,2,-1)
+    known_coeff[-1] = zeros((Nc,Nc))#array([[0.]])
+    known_coeff[0] = zeros((Nc,Nc))#array([[0.]])
+  else:
+    known_coeff = TailGf(Nc,Nc,1,-1)
+    known_coeff[-1] = zeros((Nc,Nc))#array([[0.]])
+  nmax = Q.mesh.last_index()
+  nmin = int(((starting_iw*Q.beta)/math.pi-1.0)/2.0) 
+  Q.fit_tail(known_coeff,max_order,nmin,nmax, overwrite_tail)
 
 def prepare_G0_iw(G0_iw, Gweiss, fermionic_struct, starting_iw=14.0):
   known_coeff = TailGf(1,1,3,-1)
@@ -119,4 +139,14 @@ def symmetrize_blockgf(Q):
     Qcopy << Qcopy + Q[key]
   Qcopy /= len(block_names)
   Q << Qcopy
+  del Qcopy
+
+def selective_symmetrize_blockmatrix(Q, blocks):
+  Qcopy = Q[blocks[0]].copy()
+  Qcopy[:,:] = 0.0
+  for key in blocks:
+    Qcopy += Q[key]
+  Qcopy /= len(blocks)
+  for key in blocks:
+    Q[key] = Qcopy
   del Qcopy

@@ -66,6 +66,31 @@ def local_nan_cautionary(data, struct, Qs = [], raise_exception = True):
       if nan_found and raise_exception:  
         raise Exception('No nans please')
 
+
+def symmetrize_cluster_impurity_bosonic(Q_imp_iw, identical_pairs, name="quantity"):
+  err = False
+  for (C,A),Q in Q_imp_iw:
+    for ips in identical_pairs[C]:
+      total = deepcopy(Q.data[:,0,0])
+      total[:] = 0.0   
+      counter = 0
+      for ip in ips:  
+        i,j = ip[0],ip[1]
+        if (i==-1) or (j==-1): continue
+        total += Q.data[:,i,j]
+        counter += 1 
+      total[:] /= counter 
+      for ip in ips:  
+        i,j = ip[0],ip[1]
+        if (i==-1) or (j==-1): continue
+        if numpy.any(numpy.greater(numpy.abs(Q.data[:,i,j]-total[:]), 5e-3)):
+          err = True  
+          if mpi.is_master_node():
+            print "symmetrize_cluster_impurity_bosonic: WARNING!! %s[(%s,%s)][:,%s,%s] far from average"%(name,C,A,i,j)
+        Q.data[:,i,j] = total[:]
+  return err
+
+
 def symmetrize_cluster_impurity(Sigma_imp_iw, identical_pairs, name="quantity"):
   err = False
   for C in identical_pairs.keys():     

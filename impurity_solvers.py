@@ -15,6 +15,8 @@ from copy import deepcopy
 
 from first_include import *
 from tail_fitters import symmetrize_blockgf
+from tail_fitters import selective_symmetrize_blockgf
+from tail_fitters import selective_symmetrize_blockmatrix
 from tail_fitters import fit_and_overwrite_tails_on_Sigma
 from tail_fitters import fit_and_overwrite_tails_on_G
 
@@ -43,7 +45,7 @@ import copy
 class solvers:
   class ctint:
     @staticmethod
-    def initialize_solvers(data, solver_data_package = None):
+    def initialize_solvers(data, solver_data_package = None, bosonic_measures = False):
       if solver_data_package is None: solver_data_package = {}
       
       n_tau = 2000 
@@ -52,15 +54,17 @@ class solvers:
           n_tau=1000
       assert n_tau>2*data.n_iw, "solvers.ctint.initialize_solvers: ERROR! n_tau too small!!" 
 
+      n_tau_b = (5 if (not bosonic_measures) else n_iw*4)
+      n_iw_b = (1 if (not bosonic_measures) else n_iw)
       solver_data_package['impurity_struct'] = data.impurity_struct
       solver_data_package['constructor_parameters']={}
       solver_data_package['constructor_parameters']['beta'] = data.beta
       solver_data_package['constructor_parameters']['n_iw'] = data.n_iw
       solver_data_package['constructor_parameters']['n_tau_g0'] = n_tau
       solver_data_package['constructor_parameters']['n_tau_f'] = n_tau
-      solver_data_package['constructor_parameters']['n_tau_dynamical_interactions'] = 3
-      solver_data_package['constructor_parameters']['n_iw_dynamical_interactions'] = 1
-      solver_data_package['constructor_parameters']['n_tau_nnt'] = 5
+      solver_data_package['constructor_parameters']['n_tau_dynamical_interactions'] = n_tau_b
+      solver_data_package['constructor_parameters']['n_iw_dynamical_interactions'] = n_iw_b
+      solver_data_package['constructor_parameters']['n_tau_nnt'] = n_tau_b
       solver_data_package['constructor_parameters']['n_tau_g2t'] = 5
       solver_data_package['constructor_parameters']['n_w_f_g2w'] = 2
       solver_data_package['constructor_parameters']['n_w_b_g2w'] = 2
@@ -77,7 +81,7 @@ class solvers:
         data.solvers[C] = Solver( **solver_data_package['constructor_parameters'] )
 
     @staticmethod
-    def run(data, C, U, symmetrize_quantities=True, alpha=0.5, delta=0.1, n_cycles=20000, max_time = 5*60, solver_data_package = None, only_sign = False ):
+    def run(data, C, U, symmetrize_quantities=True, alpha=0.5, delta=0.1, n_cycles=20000, max_time = 5*60, solver_data_package = None, only_sign = False, bosonic_measures = False ):
       solver = data.solvers[C]
 
       block_names = [name for name,g in solver.G0_iw]
@@ -103,7 +107,7 @@ class solvers:
       solver_data_package['solve_parameters']['n_warmup_cycles'] = 20000
       solver_data_package['solve_parameters']['only_sign'] = only_sign
       solver_data_package['solve_parameters']['measure_nn'] = True
-      solver_data_package['solve_parameters']['measure_nnt'] = False
+      solver_data_package['solve_parameters']['measure_nnt'] = bosonic_measures
       solver_data_package['solve_parameters']['measure_chipmt'] = False
       solver_data_package['solve_parameters']['measure_gw'] = False
       solver_data_package['solve_parameters']['measure_Mt'] = True
@@ -137,7 +141,12 @@ class solvers:
         if symmetrize_quantities:
           symmetrize_blockgf(G_iw)
           symmetrize_blockgf(Sigma_iw)
-
+          selective_symmetrize_blockmatrix(solver.nn, ['up|up','dn|dn'])              
+          selective_symmetrize_blockmatrix(solver.nn, ['up|dn','dn|up'])
+          if bosonic_measures:   
+            selective_symmetrize_blockgf(solver.nn_iw, ['up|up','dn|dn'])
+            selective_symmetrize_blockgf(solver.nn_iw, ['up|dn','dn|up'])  
+              
         data.G_imp_iw[C] << G_iw['up']   
         data.Sigma_imp_iw[C] << Sigma_iw['up']
       else:

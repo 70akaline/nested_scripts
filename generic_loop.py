@@ -190,6 +190,7 @@ class mixer:
   #  self.mq = ratio*self.mq_old + (1.0-ratio)*self.mq()
 
   def mix_lattice_gf(self, ratio):
+    if mpi.is_master_node(): print "mixer: ratio:",ratio
     for key in self.mq().keys():
       self.mq()[key][:,:,:] = ratio*self.mq_old[key][:,:,:] + (1.0-ratio)*self.mq()[key][:,:,:]
 

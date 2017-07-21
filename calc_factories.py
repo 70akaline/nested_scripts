@@ -22,7 +22,7 @@ def is_zero(bg):
 
 #----------------------------- nested -----------------------------------------------------------------------#
 def prepare_nested( data, nested_scheme, solver_class = solvers.ctint, flexible_Gweiss=False, sign=-1, sign_up_to=2 ):
-  assert data.__class__ == nested_data, "wrong data type"
+  assert (data.__class__ == nested_data) or (data.__class__ == nested_edmft_data) , "wrong data type"
   assert data.fermionic_struct == {'up': [0]}, "wrong fermionic struct for this calcalation"
   assert data.impurity_struct == nested_scheme.get_impurity_struct(), "wrong impurity struct for this nested scheme" 
 
@@ -50,6 +50,23 @@ def prepare_nested( data, nested_scheme, solver_class = solvers.ctint, flexible_
     data.get_Gweiss = lambda: full_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw(data.Gweiss_iw,data.Gijw,data.Sigma_imp_iw, mapping = nested_scheme.get_imp_to_latt_mapping())  
 
   data.dump_solvers = lambda suffix: [solver_class.dump( data.solvers[C], data.archive_name, suffix='-%s%s'%(C,suffix) ) for C in data.solvers.keys()]
+
+#----------------------------- nested edmft -----------------------------------------------------------------------#
+def prepare_nested_edmft( data, nested_scheme, solver_class = solvers.ctint): 
+  assert data.__class__ == nested_edmft_data, "wrong data type"
+  prepare_nested( data, nested_scheme, solver_class )
+  data.get_P_imp = lambda: fill_P_imp_from_chi_imp_W_imp_and_Uweiss(data.P_imp_iw, data.chi_imp_iw, data.W_imp_iw, data.Uweiss_iw)
+  data.get_Pijw = lambda: full_fill_Sigmaijw_from_Sigma_imp_iw(data.Pijnu, data.P_imp_iw, nested_scheme.get_latt_to_imp_mapping())
+  data.get_Pqnu = lambda: full_fill_Sigmakw_from_Sigmaijw(data.Pqnu, data.Pijnu)
+  data.get_P_loc = lambda: full_fill_local_from_latt(data.P_loc_iw, data.Pqnu)
+
+  data.get_W_imp = lambda: fill_W_imp_from_chi_imp_and_Uweiss( data.W_imp_iw, data.chi_imp_iw, data.Uweiss_iw)
+  data.get_Wqnu = lambda: full_fill_Wqnu_from_Jq_and_Pqnu(data.Jq,data.Pqnu)
+  data.get_W_loc = lambda: full_fill_local_from_latt(data.W_loc_iw, data.Wqnu)                                    
+  data.get_Wijnu = lambda: full_fill_Gijw_from_Gkw(data.Wijw, data.Wqnu, N_cores=1)
+
+  data.get_Uweiss = lambda: [ full_fill_Uweiss_iw_from_Wijnu_and_P_imp_iw(data.Uweiss_iw,data.Wijnu,data.P_imp_iw, mapping = nested_scheme.get_imp_to_latt_mapping()),
+                              fill_Uweiss_dyn_from_Uweiss(data.Uweiss_dyn_iw,data.Uweiss_iw) ]
 
 #----------------------------- cumul_nested -----------------------------------------------------------------------#
 def prepare_cumul_nested( data, nested_scheme, solver_class = solvers.ctint  ):

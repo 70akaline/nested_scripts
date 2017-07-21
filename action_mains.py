@@ -9,7 +9,7 @@ from impurity_solvers import solvers
 
 class nested_mains:
   @staticmethod 
-  def selfenergy(data,):
+  def selfenergy(data):
     data.get_Sigmaijw()
     data.get_Sigmakw() 
     data.get_Sigma_loc()  
@@ -81,8 +81,14 @@ class nested_mains:
     data.get_Gijw()
 
   @staticmethod
-  def pre_impurity(data):
-    data.get_Gweiss()    
+  def pre_impurity(data, Cs=[]):
+    data.get_Gweiss() 
+    for C in (data.impurity_struct.keys() if Cs==[] else Cs):
+      solver_struct = {'up': data.impurity_struct[C], 'dn': data.impurity_struct[C]}        
+      for key in solver_struct.keys():
+        data.solvers[C].G0_iw[key] << data.Gweiss_iw[C]
+      data.solvers[C].Jperp_iw << 0.0
+      data.solvers[C].D0_iw << 0.0   
 
   @classmethod
   def optimize_alpha_and_delta(cls, data, C, U, max_time, solver_data_package):
@@ -107,15 +113,10 @@ class nested_mains:
     return alphas[ai], deltas[di], max_sign 
 
   @staticmethod
-  def impurity(data, U, symmetrize_quantities = True, alpha=0.5, delta=0.1, automatic_alpha_and_delta = False, n_cycles=20000, max_times = {'1x1': 5*60 }, solver_data_package = None, Cs = [] ):
+  def impurity(data, U, symmetrize_quantities = True, alpha=0.5, delta=0.1, automatic_alpha_and_delta = False, n_cycles=20000, max_times = {'1x1': 5*60 }, solver_data_package = None, Cs = [], bosonic_measures = False ):
     if mpi.is_master_node(): print "nested_mains.impurity. max_times",max_times
     data.Sigma_imp_iw << 0
-    for C in (data.impurity_struct.keys() if Cs==[] else Cs):
-      solver_struct = {'up': data.impurity_struct[C], 'dn': data.impurity_struct[C]}        
-      for key in solver_struct.keys():
-        data.solvers[C].G0_iw[key] << data.Gweiss_iw[C]
-      data.solvers[C].Jperp_iw << 0.0
-      data.solvers[C].D0_iw << 0.0
+    for C in (data.impurity_struct.keys() if Cs==[] else Cs):  
       if automatic_alpha_and_delta:
         if mpi.is_master_node(): print "about to optimize alpha and delta for impurity",C
         shorttime = min(600, max(30,int(max_times[C]/100)))
@@ -123,7 +124,7 @@ class nested_mains:
         alpha, delta, max_sign = nested_mains.optimize_alpha_and_delta(data, C, U, shorttime, solver_data_package) 
         if mpi.is_master_node(): print "%s >>>> best (alpha=%s,delta=%s): max_sign=%s"%(C,alpha,delta,max_sign)
       if mpi.is_master_node(): print "nested_mains.impurity: launching impurity",C
-      solvers.ctint.run(data, C, U, symmetrize_quantities, alpha, delta, n_cycles, max_times[C], solver_data_package)
+      solvers.ctint.run(data, C, U, symmetrize_quantities, alpha, delta, n_cycles, max_times[C], solver_data_package, bosonic_measures=bosonic_measures)
 
   @staticmethod
   def impurity_cthyb(data, U, symmetrize_quantities = True, n_cycles=20000, max_times = {'1x1': 5*60 }, solver_data_package = None, Cs = [] ):
@@ -164,5 +165,95 @@ class dca_plus_mains:
     data.get_Xik()
     data.get_Sigmaimpk()
     data.get_Sigmakw()
-     
-     
+
+#--------------------------------------------- nested edmft ----------------------------------#
+
+class nested_edmft_mains:
+
+  @staticmethod 
+  def selfenergy(data):
+    nested_mains.selfenergy(data)
+    data.get_Pijnu()
+    data.get_Pqnu() 
+    data.get_P_loc()  
+
+  @staticmethod 
+  def lattice(data, n, ph_symmetry, accepted_mu_range=[-2.0,2.0]):
+    nested_mains.lattice(data, n, ph_symmetry, accepted_mu_range) 
+    data.get_Wqnu()
+    data.get_Wijnu()
+    data.get_W_loc()
+
+  @classmethod
+  def extract_chi_imp_from_solver(data, su2_symmetry=False): #this function doesn't belong here. move it to file with formulas
+    for C in data.impurity_struct.keys():
+      for A in data.bosonic_struct.leys():
+        blocks = [name for name, nn_iw in data.solvers[C].nn_iw]
+        blocks2 = [name for name, nn in data.solvers[C].nn]
+        assert set(blocks)==set(blocks2), "block structure crap"
+        assert 'up|up' in blocks, "wrong solver block structure"
+        assert 'dn|dn' in blocks, "wrong solver block structure"
+        assert 'up|dn' in blocks, "wrong solver block structure"
+        assert 'dn|up' in blocks, "wrong solver block structure"      
+        
+        if A == '0': 
+          sgn = 1
+          pref = 1
+        if A == '1':
+          sgn = -1
+          pref = int(not su2_symmetry)
+        if A == '+-': assert False, "not implemented"
+        data.chi_imp_iw[(C,A)] << data.solvers[C].nn_iw['up|up'] \
+                                + data.solvers[C].nn_iw['dn|dn'] \
+                                + sgn*data.solvers[C].nn_iw['up|dn'] \
+                                + sgn*data.solvers[C].nn_iw['dn|up']
+        for i in data.impurity_struct[C]:
+          for j in data.impurity_struct[C]:
+            data.chi_imp_iw[(C,A)].data[data.nnu/2,i,j] -= pref*data.beta\
+                                                           *(data.solvers[C].nn['up|up'][i,i]+sgn*data.solvers[C].nn['dn|dn'][i,i])\
+                                                           *(data.solvers[C].nn['up|up'][j,j]+sgn*data.solvers[C].nn['dn|dn'][j,j])
+
+  @classmethod
+  def prepare_Jperp_iw(data, Cs=[]): #takes a single block
+    for C in (data.impurity_struct.keys() if Cs=[] else Cs): 
+      data.solvers[C].Jperp_iw << 0.0
+  #  Jperp_iw << Uweiss_iw
+  #  fixed_coeff = TailGf(1,1,2,-1) #not general for clusters
+  #  fixed_coeff[-1] = array([[0.]])
+  #  fixed_coeff[0] = array([[0.]])
+  #  nmax = Jperp_iw.mesh.last_index()
+  #  nmin = nmax/2
+  #  Jperp_iw.fit_tail(fixed_coeff, 5, nmin, nmax, True) #!!!!!!!!!!!!!!!1
+
+  @classmethod
+  def prepare_D0_iw(data, Cs=[]):
+    blocks = ['up','dn']
+    for C in (data.impurity_struct.keys() if Cs=[] else Cs): 
+      for bl1 in blocks:
+        for bl2 in blocks:
+          d0 =  data.solvers[C].D0_iw[bl1+'|'+bl2] 
+          d0 << 0.0
+          for A in data.bosonic_struct.keys():
+            pref = 1.0
+            if (bl1!=bl2) and (A=='1'):
+              pref *= -1.0        
+            d0 << d0 + pref*data.Uweiss_dyn_iw[(C,A)]
+          fit_bosonic_tail(d0, no_static=True, overwrite_tail=True, max_order=5)
+
+  @staticmethod
+  def pre_impurity(data, Cs=[]):
+    nested_mains.pre_impurity(data,Cs)  
+    data.get_Uweiss()    
+    nested_edmft_mains.prepare_D0_iw(data, Cs)
+    nested_edmft_mains.prepare_Jperp_iw(data,Cs)
+
+  @staticmethod
+  def post_impurity(data, Cs=[], su2_symmetry=False, identical_pairs = [], homogeneous_pairs = []):
+    nested_edmft_mains.extract_chi_imp_from_solver(data, su2_symmetry)
+    if identical_pairs!=[]: symmetrize_cluster_impurity_bosonic(data.chi_imp_iw, identical_pairs, name="chi_imp_iw")
+    data.get_W_imp() 
+    if identical_pairs!=[]: symmetrize_cluster_impurity_bosonic(data.W_imp_iw, identical_pairs, name="W_imp_iw")
+    if homogeneous_pairs!=[]: symmetrize_cluster_impurity_bosonic(data.W_imp_iw, homogeneous_pairs, name="W_imp_iw")
+    data.get_P_imp()
+    if identical_pairs!=[]: symmetrize_cluster_impurity_bosonic(data.W_imp_iw, identical_pairs, name="P_imp_iw")
+

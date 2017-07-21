@@ -125,15 +125,15 @@ def blockwise_get_Gijtau_from_Gkw(Gkw,
                                   N_cores=1): #only use for Gtilde... for the full G one must fit tail. TODO
    return total_inverse_FT(Gkw, beta, ntau, n_iw, n_k, statistic='Fermion', use_IBZ_symmetry = True, fit_tail = False, N_cores=N_cores)
 
-def blockwise_get_Gijw_from_Gkw(Gkw, N_cores=1): #only use for Gtilde... for the full G one must fit tail. TODO
+def blockwise_get_Gijw_from_Gkw(Gkw, N_cores=1): 
    return spatial_inverse_FT(Gkw, N_cores=N_cores)
 
-def full_fill_Gijw_from_Gkw(Gijw, Gkw, N_cores=1): #only use for Gtilde... for the full G one must fit tail. TODO
+def full_fill_Gijw_from_Gkw(Gijw, Gkw, N_cores=1): 
   if mpi.is_master_node(): print "full_fill_Gijw_from_Gkw"
   for U in Gkw.keys():
     Gijw[U][:,:,:] = blockwise_get_Gijw_from_Gkw(Gkw[U], N_cores)
 
-def full_fill_Sigmakw_from_Sigmaijw(Sigmakw, Sigmaijw, N_cores=1): #only use for Gtilde... for the full G one must fit tail. TODO
+def full_fill_Sigmakw_from_Sigmaijw(Sigmakw, Sigmaijw, N_cores=1): 
   if mpi.is_master_node(): print "full_fill_Sigmakw_from_Sigmaijw"
   for U in Sigmaijw.keys():
     Sigmakw[U][:,:,:] = spatial_FT(Sigmaijw[U], N_cores=N_cores)
@@ -239,6 +239,15 @@ def blockwise_get_Gkw_from_iws_mu_epsiolonk_and_Sigmakw(iws,mu,epsilonk,Sigmakw)
   if mpi.is_master_node(): print "done!"
   return Gkw 
 
+def blockwise_get_Wqnu_from_Jq_and_Pqnu(Jq,Pqnu):
+  if mpi.is_master_node(): print "blockwise_get_Wqnu_from_Jq_and_Pqnu...",
+  Wqnu = -Pqnu[:,:,:]
+  Wqnu[:,:,:] += 1.0/Jq[:,:]
+  Wqnu **= -1.0
+  if mpi.is_master_node(): print "done!"
+  return Wqnu
+
+
 #-----------------------------------------------------------------------------------------------------------------------------------------------#
 def full_fill_Gkw_from_iws_mus_epsiolonk_and_Sigmakw(Gkw, iws, mus, epsilonk, Sigmakw):
   if mpi.is_master_node(): print "full_fill_Gkw_from_iws_mus_epsiolonk_and_Sigmakw"
@@ -253,13 +262,17 @@ def full_fill_Gkw_from_epsiolonk_and_gkw(Gkw, epsilonk, gkw):
     invG -= epsilonk[U]
     Gkw[U][:,:,:] = invG**(-1.0)
 
-
+def full_fill_Wqnu_from_Jq_and_Pqnu(Jq,Pqnu):
+  if mpi.is_master_node(): print "full_fill_Wqnu_from_Jq_and_Pqnu"
+  for A in Wqnu.keys():
+    Wqnu[A][:,:,:] = blockwise_get_Wqnu_from_Jq_and_Pqnu(Jq[A],Pqnu[A])
+  if mpi.is_master_node(): print "done!"
 #-----------------------------------------------------------------------------------------------------------------------------------------------#
 #                                        weiss_field
 #-----------------------------------------------------------------------------------------------------------------------------------------------#
 
 
-def blockwise_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw(Gweiss_iw,Gijw,Sigma_imp_iw, mapping = lambda i,j: [0,0]):
+def blockwise_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw(Gweiss_iw,Gijw,Sigma_imp_iw, mapping = lambda i,j: [0,0], bosonic_fit = False):
   if mpi.is_master_node(): print "blockwise_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw"
   n_sites = len(Gweiss_iw.data[0,0,:])
   nw = len(Gweiss_iw.data[:,0,0])
@@ -273,7 +286,10 @@ def blockwise_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw(Gweiss_iw,Gijw,Sigma_imp
     invGtemp[wi,:,:] = inv(Gtemp[wi,:,:])
     Gweiss_iw.data[wi,:,:] = inv(invGtemp[wi,:,:] + Sigma_imp_iw.data[wi,:,:])
 
-  fit_fermionic_gf_tail(Gweiss_iw)
+  if bosonic_fit:
+    fit_bosonic_tail(Gweiss_iw)
+  else:
+    fit_fermionic_gf_tail(Gweiss_iw)
 
 def full_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw(Gweiss_iw,Gijw,Sigma_imp_iw, mapping = lambda C,i,j: [0,0]):      
   if mpi.is_master_node(): print "full_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw"
@@ -337,6 +353,28 @@ def flexible_Gweiss_iw_from_Gweiss_iw_Gijw_and_G_imp_iw(Gweiss_iw, Gijw, G_imp_i
   if mpi.is_master_node(): print "done!"
 
 
+#-----------------------------------------------------------------------------------------------------------------------------------------------#
+#                                        nested edmft specific
+#-----------------------------------------------------------------------------------------------------------------------------------------------#
+
+def fill_W_imp_from_chi_imp_and_Uweiss( W_imp_iw, chi_imp_iw, Uweiss_iw):
+  for bl, W in W_imp_iw:
+    W << Uweiss_iw[bl] - Uweiss_iw[bl]*chi_imp_iw[bl]*Uweiss_iw[bl]
+
+def fill_P_imp_from_chi_imp_W_imp_and_Uweiss(P_imp_iw, chi_imp_iw, W_imp_iw, Uweiss_iw):
+  for bl, P in P_imp_iw:
+    P << - chi_imp_iw[bl]*Uweiss_iw[bl]*inverse(W_imp_iw[bl])
+
+def full_fill_Uweiss_iw_from_Wijnu_and_P_imp_iw(Uweiss_iw,Wijnu, P_imp_iw, mapping = lambda C,i,j: [0,0]):      
+  if mpi.is_master_node(): print "full_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw" 
+  for (C,A),U in Uweiss_iw:
+    blockwise_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw(Uweiss_iw[(C,A)],Wijnu[A],P_imp_iw[(C,A)], mapping= lambda i,j: mapping(C,i,j) ) 
+  if mpi.is_master_node(): print "done!"
+
+def fill_Uweiss_dyn_from_Uweiss(Uweiss_dyn_iw, Uweiss_iw ):      
+    Uweiss_dyn_iw << Uweiss_iw #prepare the non-static part - static part goes separately in the impurity solver  
+    for bl, Uweiss in Uweiss_dyn_iw: 
+      fit_and_remove_constant_tail(Uweiss, general=True) 
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------#
 #                                        cumulant
