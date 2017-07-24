@@ -360,6 +360,23 @@ def flexible_Gweiss_iw_from_Gweiss_iw_Gijw_and_G_imp_iw(Gweiss_iw, Gijw, G_imp_i
 #                                        nested edmft specific
 #-----------------------------------------------------------------------------------------------------------------------------------------------#
 
+def full_fill_Pijnu_from_P_imp_iw(Pijnu, P_imp_iw, mapping):
+  if mpi.is_master_node(): print "full_fill_Pijnu_from_P_imp_iw"
+  #impurity_blocks = [name for name, g in Sigma_imp_iw] don't need this
+  for A in Pijnu.keys():
+    nk = len(Pijnu[A][0,0,:])
+    Pijnu[A][:,:,:] = 0.0
+    for x in range(nk):
+      for y in range(nk):
+          mps = mapping(x,y)
+          for mp in mps:
+            C = mp[0]
+            pref = mp[1]
+            i = mp[2]
+            j = mp[3]
+            Pijnu[A][:,x,y] += pref * P_imp_iw[C+"|"+A].data[:,i,j]
+
+
 def fill_W_imp_from_chi_imp_and_Uweiss( W_imp_iw, chi_imp_iw, Uweiss_iw):
   if mpi.is_master_node(): print "fill_W_imp_from_chi_imp_and_Uweiss" 
   for bl, W in W_imp_iw:

@@ -57,7 +57,7 @@ def prepare_nested_edmft( data, nested_scheme, solver_class = solvers.ctint):
   assert data.__class__ == nested_edmft_data, "wrong data type"
   prepare_nested( data, nested_scheme, solver_class )
   data.get_P_imp = lambda: fill_P_imp_from_chi_imp_W_imp_and_Uweiss(data.P_imp_iw, data.chi_imp_iw, data.W_imp_iw, data.Uweiss_iw)
-  data.get_Pijw = lambda: full_fill_Sigmaijw_from_Sigma_imp_iw(data.Pijnu, data.P_imp_iw, nested_scheme.get_latt_to_imp_mapping())
+  data.get_Pijnu = lambda: full_fill_Pijnu_from_P_imp_iw(data.Pijnu, data.P_imp_iw, nested_scheme.get_latt_to_imp_mapping())
   data.get_Pqnu = lambda: full_fill_Sigmakw_from_Sigmaijw(data.Pqnu, data.Pijnu)
   data.get_P_loc = lambda: full_fill_local_from_latt(data.P_loc_iw, data.Pqnu)
 
