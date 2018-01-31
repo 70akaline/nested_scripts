@@ -22,7 +22,7 @@ def is_zero(bg):
   return sum([ numpy.count_nonzero(g.data) for name, g in bg ]) == 0
 
 #----------------------------- nested -----------------------------------------------------------------------#
-def prepare_nested( data, nested_scheme, solver_class = solvers.ctint, flexible_Gweiss=False, sign=-1, sign_up_to=2 ):
+def prepare_nested( data, nested_scheme, solver_class = solvers.ctint, flexible_Gweiss=False, sign=-1, sign_up_to=2, use_G_proj = False ):
   assert (data.__class__ == nested_data) or (data.__class__ == nested_edmft_data) , "wrong data type"
   assert data.fermionic_struct == {'up': [0]}, "wrong fermionic struct for this calcalation"
   assert data.impurity_struct == nested_scheme.get_impurity_struct(), "wrong impurity struct for this nested scheme" 
@@ -34,8 +34,11 @@ def prepare_nested( data, nested_scheme, solver_class = solvers.ctint, flexible_
   data.get_Gkw = lambda: full_fill_Gkw_from_iws_mus_epsiolonk_and_Sigmakw(data.Gkw, data.iws, data.mus, data.epsilonk, data.Sigmakw)
   data.get_G_loc = lambda: full_fill_local_from_latt(data.G_loc_iw, data.Gkw)
   data.get_n_from_G_loc = lambda: blockwise_get_n_from_G_loc_iw(data.G_loc_iw['up'], fit_tail_starting_iw = 14.0, ntau = None, site_index = 0)
-                                  
-  data.get_Gijw = lambda: full_fill_Gijw_from_Gkw(data.Gijw, data.Gkw, N_cores=1)
+
+  if use_G_proj:                                  
+    data.get_Gijw = lambda: [full_fill_Gijw_from_Gkw(data.Gijw, data.Gkw, N_cores=1), full_fill_G_proj_iw(data.G_proj_iw, data.Gijw, nested_scheme) ]
+  else:
+    data.get_Gijw = lambda: full_fill_Gijw_from_Gkw(data.Gijw, data.Gkw, N_cores=1)
 
   data.set_mu = lambda mu: set_mu(mu, data)
   data.get_mu = lambda: data.mus['up']
@@ -47,6 +50,8 @@ def prepare_nested( data, nested_scheme, solver_class = solvers.ctint, flexible_
                                 if not is_zero(data.Gweiss_iw) else
                                 full_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw(data.Gweiss_iw,data.Gijw,data.Sigma_imp_iw, mapping = nested_scheme.get_imp_to_latt_mapping())    
                               )
+  elif use_G_proj:
+    data.get_Gweiss = lambda: full_full_Gweiss_iw_from_G_proj_iw_and_Sigma_imp_iw(data.Gweiss_iw,data.G_proj_iw,data.Sigma_imp_iw)  
   else:
     data.get_Gweiss = lambda: full_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw(data.Gweiss_iw,data.Gijw,data.Sigma_imp_iw, mapping = nested_scheme.get_imp_to_latt_mapping())  
 
@@ -68,6 +73,21 @@ def prepare_nested_edmft( data, nested_scheme, solver_class = solvers.ctint):
 
   data.get_Uweiss = lambda: [ full_fill_Uweiss_iw_from_Wijnu_and_P_imp_iw(data.Uweiss_iw,data.Wijnu,data.P_imp_iw, mapping = nested_scheme.get_imp_to_latt_mapping()),
                               fill_Uweiss_dyn_from_Uweiss(data.Uweiss_dyn_iw,data.Uweiss_iw) ]
+  #no lattice calc, for reversed etc.
+  mp = nested_scheme.get_imp_to_latt_mapping()
+  print "nested_scheme.maxLx: ",nested_scheme.maxLx
+  print "max  nsites:", nested_scheme.maxLx**2
+  def ij_iterator():
+    nsites = nested_scheme.maxLx**2
+    for i in range(nsites):
+      for j in range(nsites):
+        yield i,j
+  def ijA_iterator():
+    for i,j in ij_iterator():
+      for A in data.bosonic_struct.keys():
+         yield i,j,A
+  data.copy_imp_to_latt = lambda C: [ [ numpy.copyto(data.Gijw['up'][:,mp(C,i,j)[0], mp(C,i,j)[1]],data.G_imp_iw[C].data[:,i,j]) for i,j in ij_iterator()], 
+                                      [ numpy.copyto(data.Wijnu[A][:,mp(C,i,j)[0], mp(C,i,j)[1]],data.W_imp_iw[C+'|'+A].data[:,i,j]) for i,j,A in ijA_iterator() ] ] 
 
 #----------------------------- cumul_nested -----------------------------------------------------------------------#
 def prepare_cumul_nested( data, nested_scheme, solver_class = solvers.ctint  ):

@@ -18,7 +18,9 @@ from copy import deepcopy
 from nested_scripts import *
 
 
-def nested_calculation( clusters, nested_struct_archive_name = None, flexible_Gweiss=False, sign=-1, sign_up_to=2, use_Gweiss_causal_cautionary = False,
+def nested_calculation( clusters, nested_struct_archive_name = None, flexible_Gweiss=False, sign=-1, sign_up_to=2, use_Gweiss_causal_cautionary = False, 
+                        use_G_proj = False, 
+                        mix_G_proj = False, G_proj_mixing_rules = [[0,0.0]],
                         Us = [1.0],
                         Ts = [0.125], 
                         ns = [0.5], fixed_n = True,
@@ -162,12 +164,12 @@ def nested_calculation( clusters, nested_struct_archive_name = None, flexible_Gw
 
     if not use_cumulant: 
       prepare = prepare_nested
-    else: 
+    else:         
       prepare = prepare_cumul_nested
     if flexible_Gweiss:
       prepare( dt, nested_scheme, solver_class, flexible_Gweiss, sign, sign_up_to )
     else:  
-      prepare( dt, nested_scheme, solver_class )
+      prepare( dt, nested_scheme, solver_class, use_G_proj=use_G_proj )
 
     solver_class.initialize_solvers( dt, solver_data_package )
  
@@ -197,7 +199,7 @@ def nested_calculation( clusters, nested_struct_archive_name = None, flexible_Gw
     actions =[  generic_action(  name = "lattice",
                     main = lambda data: nested_mains.lattice(data, n=n, ph_symmetry=ph_symmetry, accepted_mu_range=[-2.0,2.0]),
                     mixers = [], cautionaries = [], allowed_errors = [],    
-                    printout = lambda data, it: ( [data.dump_general( quantities = ['Gkw','Gijw'], suffix='-current' ), data.dump_scalar(suffix='-current')
+                    printout = lambda data, it: ( [data.dump_general( quantities = ['Gkw','Gijw']+(['G_proj_iw'] if use_G_proj else []), suffix='-current' ), data.dump_scalar(suffix='-current')
                                                   ] if ((it+1) % print_current==0) else None 
                                                 )
                               ),
@@ -289,7 +291,17 @@ def nested_calculation( clusters, nested_struct_archive_name = None, flexible_Gw
                             accuracy=accuracy, 
                             struct=fermionic_struct, 
                             archive_name= dt.archive_name,
-                            h5key = 'diffs_Sigma_loc') ]
+                            h5key = 'diffs_Sigma_loc'),
+                   converger( monitored_quantity = lambda: dt.G_imp_iw,
+                            accuracy=accuracy, 
+                            struct=impurity_struct, 
+                            archive_name= dt.archive_name,
+                            h5key = 'diffs_G_imp' ),
+                   converger( monitored_quantity = lambda: dt.Gweiss_iw,
+                            accuracy=accuracy, 
+                            struct=impurity_struct, 
+                            archive_name= dt.archive_name,
+                            h5key = 'diffs_Gweiss' )  ]
     max_dist = 3
     for i in range(max_dist+1):
       for j in range(0,i+1):
@@ -298,12 +310,6 @@ def nested_calculation( clusters, nested_struct_archive_name = None, flexible_Gw
                                       func = converger.check_numpy_array,  
                                       archive_name= dt.archive_name,
                                       h5key = 'diffs_G_%s%s'%(i,j) ) )
-    convergers.append( converger( monitored_quantity = lambda: dt.G_imp_iw,
-                                  accuracy=accuracy, 
-                                  struct=impurity_struct, 
-                                  archive_name= dt.archive_name,
-                                  h5key = 'diffs_G_imp' ) )
-
     dmft = generic_loop(
                 name = "nested-cluster DMFT", 
                 actions = actions,
@@ -384,6 +390,13 @@ def nested_calculation( clusters, nested_struct_archive_name = None, flexible_Gw
                                       rules=rules,
                                       func=mixer.mix_block_gf,
                                       initialize = True ) ])
+
+    if mix_G_proj:
+      actions[0].mixers.append( mixer( mixed_quantity = lambda: dt.G_proj_iw,
+                                      rules=G_proj_mixing_rules,
+                                      func=mixer.mix_block_gf,
+                                      initialize = True ) )
+
 
     dt.dump_parameters()
     dt.dump_non_interacting() 

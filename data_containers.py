@@ -433,6 +433,7 @@ class local_data(basic_data):
       gs.append ( GfImFreq(indices = self.impurity_struct[C], beta = self.beta, n_points =self.n_iw, statistic = 'Fermion') )     
 
     self.G_imp_iw = BlockGf(name_list = self.impurity_struct.keys(), block_list = gs, make_copies = True)
+    self.G_proj_iw = BlockGf(name_list = self.impurity_struct.keys(), block_list = gs, make_copies = True)
     self.Sigma_imp_iw = BlockGf(name_list = self.impurity_struct.keys(), block_list = gs, make_copies = True)
     self.Gweiss_iw = BlockGf(name_list = self.impurity_struct.keys(), block_list = gs, make_copies = True)
 
@@ -443,7 +444,7 @@ class local_data(basic_data):
     self.G_loc_iw = BlockGf(name_list = self.fermionic_struct.keys(), block_list = gs, make_copies = True)
     self.Sigma_loc_iw = BlockGf(name_list = self.fermionic_struct.keys(), block_list = gs, make_copies = True)
 
-    self.impurity_fermionic_gfs = [ 'G_imp_iw', 'Sigma_imp_iw', 'Gweiss_iw' ]
+    self.impurity_fermionic_gfs = [ 'G_imp_iw', 'Sigma_imp_iw', 'Gweiss_iw', 'G_proj_iw' ]
     self.local_fermionic_gfs = [ 'G_loc_iw', 'Sigma_loc_iw' ]
 
     self.local_quantities.extend( self.local_fermionic_gfs + self.impurity_fermionic_gfs ) 
@@ -835,18 +836,20 @@ class dca_data(local_data):
     self.local_fermionic_gfs.remove('G_loc_iw')
     self.local_fermionic_gfs.extend(new_local)
     self.local_quantities.remove('G_loc_iw')
+    print "dca before: ",self.local_quantities  
     self.local_quantities.extend(new_local) 
+    print "dca after: ",self.local_quantities  
 
 #================================ DCA+ ===========================================================#
 class dca_plus_data(dca_data, non_local_data):
   def __init__(self, n_k = 128,
                      n_iw = 100,                     
                      beta = 10.0, 
-                     impurity_struct = {'up': range(4)},
-                     fermionic_struct = {'0': [0],'1': [0],'2': [0],'3': [0]},
+                     impurity_struct = {'0': [0],'1': [0],'2': [0],'3': [0]},
+                     fermionic_struct = {'up': range(4)},
                      archive_name="dmft.out.h5"):
     dca_data.__init__(self, n_iw, beta, impurity_struct, fermionic_struct, archive_name)
-    non_local_data.__init__(self, n_iw, n_k, beta, {'up': [0]}, archive_name)
+    non_local_data.promote(self, n_k)
     #self.non_local_struct = 
     #self.fermionic_struct = self.non_local_struct #just temporarily
     #non_local_data.promote(self, n_k)
@@ -871,7 +874,9 @@ class dca_plus_data(dca_data, non_local_data):
     new_local = ['XiK_iw','XiR_iw']
 
     self.local_fermionic_gfs.extend(new_local)    
+    print "before: ",self.local_quantities 
     self.local_quantities.extend(new_local) 
+    print "after: ",self.local_quantities 
 
     new_non_local = [ 'Xikw', 'Sigmaimpkw']
     self.non_local_fermionic_gfs = new_non_local

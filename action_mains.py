@@ -82,15 +82,15 @@ class nested_mains:
 
     data.get_Gijw()
 
-  @staticmethod
-  def pre_impurity(data, Cs=[]):
-    data.get_Gweiss() 
-    for C in (data.impurity_struct.keys() if Cs==[] else Cs):
-      solver_struct = {'up': data.impurity_struct[C], 'dn': data.impurity_struct[C]}        
-      for key in solver_struct.keys():
-        data.solvers[C].G0_iw[key] << data.Gweiss_iw[C]
-      data.solvers[C].Jperp_iw << 0.0
-      data.solvers[C].D0_iw << 0.0   
+#  @staticmethod
+#  def pre_impurity(data, Cs=[]):
+#    data.get_Gweiss() 
+#    for C in (data.impurity_struct.keys() if Cs==[] else Cs):
+#      solver_struct = {'up': data.impurity_struct[C], 'dn': data.impurity_struct[C]}        
+#      for key in solver_struct.keys():
+#        data.solvers[C].G0_iw[key] << data.Gweiss_iw[C]
+#      data.solvers[C].Jperp_iw << 0.0
+#      data.solvers[C].D0_iw << 0.0   
 
   @staticmethod
   def pre_impurity(data, Cs=[]):
@@ -99,8 +99,8 @@ class nested_mains:
   @classmethod
   def optimize_alpha_and_delta(cls, data, C, U, max_time, solver_data_package):
     if mpi.is_master_node(): print "nested_mains.optimize_alpha_and_delta"
-    alphas = [0.5]#[0.3,0.4,0.45,0.48, 0.5, 0.52, 0.55,0.6,0.7]
-    deltas = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+    alphas = [0.5,0.4,0.6,0.3,0.7]#[0.3,0.4,0.45,0.48, 0.5, 0.52, 0.55,0.6,0.7]
+    deltas = [0.1, 0.5, 0.8]
     signs = numpy.zeros((len(alphas),len(deltas))) 
     breaker = False     
     for alpha in alphas:
@@ -201,8 +201,8 @@ class nested_edmft_mains:
     data.get_W_loc()
 
   @classmethod
-  def extract_chi_imp_from_solver(cls, data, su2_symmetry=False): #this function doesn't belong here. move it to file with formulas
-    for C in data.impurity_struct.keys():
+  def extract_chi_imp_from_solver(cls, data, su2_symmetry=False, Cs=[]): #this function doesn't belong here. move it to file with formulas
+    for C in (data.impurity_struct.keys() if Cs==[] else Cs):
       for A in data.bosonic_struct.keys():
         CA = C+"|"+A
         blocks = [name for name, nn_iw in data.solvers[C].nn_iw]
@@ -264,7 +264,7 @@ class nested_edmft_mains:
 
   @staticmethod
   def post_impurity(data, Cs=[], su2_symmetry=False, identical_pairs = [], homogeneous_pairs = []):
-    nested_edmft_mains.extract_chi_imp_from_solver(data, su2_symmetry)
+    nested_edmft_mains.extract_chi_imp_from_solver(data, su2_symmetry, Cs)
     if identical_pairs!=[]: symmetrize_cluster_impurity_bosonic(data.chi_imp_iw, identical_pairs, name="chi_imp_iw")
     data.get_W_imp() 
     if identical_pairs!=[]: symmetrize_cluster_impurity_bosonic(data.W_imp_iw, identical_pairs, name="W_imp_iw")

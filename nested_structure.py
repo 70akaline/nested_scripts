@@ -422,7 +422,8 @@ class contribution():
             spscr = "\mathrm{imp}"
             for s in self.sites_contained:
                 spscr += "(%s,%s)"%(s[0],s[1])
-        return "%s%s\Sigma_{%s%s}^{%s}"%(sgnp,absp,self.i, self.j, spscr )
+        #return "%s%s\Sigma_{%s%s%s}^{%s}"%(sgnp,absp,self.i,("\," if ((self.i>9) or (self.j>9)) else ""), self.j, spscr )
+        return "%s%s\Sigma_{%s\,%s}^{%s}"%(sgnp,absp,self.i, self.j, spscr )
         
     def __str__(self):
         tex = self.get_tex()

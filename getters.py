@@ -272,6 +272,29 @@ def full_fill_Wqnu_from_Jq_and_Pqnu(Wqnu,Jq,Pqnu):
 #                                        weiss_field
 #-----------------------------------------------------------------------------------------------------------------------------------------------#
 
+def full_fill_G_proj_iw(G_proj_iw, Gijw, nested_scheme):
+  if mpi.is_master_node(): print "full_fill_G_proj_iw"
+  assert 'up' in Gijw.keys(), "something wrong with Gijw"
+  mapping = nested_scheme.get_imp_to_latt_mapping()
+  nw = len(Gijw['up'][:,0,0])
+  imp_struct = nested_scheme.get_impurity_struct()
+  for C in imp_struct.keys():
+    n_sites = len(imp_struct[C])
+    for i in range(n_sites):
+      for j in range(n_sites):
+         G_proj_iw[C].data[:,i,j] = Gijw['up'][:,mapping(C,i,j)[0], mapping(C,i,j)[1]] 
+
+def full_full_Gweiss_iw_from_G_proj_iw_and_Sigma_imp_iw(Gweiss_iw, G_proj_iw, Sigma_imp_iw, bosonic_fit = False):   
+  for C, g in Gweiss_iw:
+    nw = len(g.data[:,0,0])
+    for wi in range(nw):
+      g.data[wi,:,:] = inv(inv(G_proj_iw[C].data[wi,:,:]) + Sigma_imp_iw[C].data[wi,:,:])
+
+    if bosonic_fit:
+      fit_bosonic_tail(Gweiss_iw[C])
+    else:
+      fit_fermionic_gf_tail(Gweiss_iw[C])
+
 
 def blockwise_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw(Gweiss_iw,Gijw,Sigma_imp_iw, mapping = lambda i,j: [0,0], bosonic_fit = False):
   if mpi.is_master_node(): print "blockwise_fill_Gweiss_iw_from_Gijw_and_Sigma_imp_iw"

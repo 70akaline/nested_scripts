@@ -39,6 +39,8 @@ def nested_edmft_calculation( clusters, nested_struct_archive_name = None, flexi
                               print_current = 1,
                               insulating_initial = False,
                               Wilson_bath_initial = False,
+                              bath_initial = False,
+                              selfenergy_initial = False,  
                               initial_guess_archive_name = '', suffix=''):
 
   if mpi.is_master_node():
@@ -214,12 +216,13 @@ def nested_edmft_calculation( clusters, nested_struct_archive_name = None, flexi
       for x in args: print x,
       print "" 
 
+    used_Cs = []
+
     actions =[  generic_action(  name = "lattice",
                     main = ( (lambda data: nested_edmft_mains.lattice(data, n=n, ph_symmetry=ph_symmetry, accepted_mu_range=[-2.0,2.0]))
                              if (not no_lattice) else
-                             (lambda data: [ numpy.copyto(data.Gijw['up'][:,0,0],data.G_imp_iw['1x1'].data[:,0,0]), 
-                                             [ numpy.copyto(data.Wijnu[A][:,0,0],data.W_imp_iw['1x1|'+A].data[:,0,0]) for A in data.Wijnu.keys() ],
-                                             do_print("just copying local G, no_lattice! Gijw000:",data.Gijw['up'][0,0,0],
+                             (lambda data: [ data.copy_imp_to_latt(used_Cs[0]),
+                                             do_print("just copying imp",used_Cs[0],"->latt, no_lattice! Gijw000:",data.Gijw['up'][0,0,0],
                                                       [ "Wijnu_"+A+ "000:"+str(data.Wijnu['0'][0,0,0]) for A in data.Wijnu.keys()] ) ]) #TODO generalize for any size cluster
                            ),
                            
@@ -229,27 +232,27 @@ def nested_edmft_calculation( clusters, nested_struct_archive_name = None, flexi
                                                 )
                               ),
                 generic_action(  name = "pre_impurity",
-                    main = lambda data: nested_edmft_mains.pre_impurity(data, freeze_Uweiss = freeze_Uweiss),                       
+                    main = lambda data: nested_edmft_mains.pre_impurity(data, freeze_Uweiss = freeze_Uweiss, Cs= used_Cs),                       
                     mixers = [], cautionaries = [], allowed_errors = [],        
                     printout = lambda data, it: ( data.dump_general( quantities = ['Gweiss_iw','Uweiss_iw','Uweiss_dyn_iw'], suffix='-current' ) )
                               ),
                 generic_action(  name = "impurity",
                     main = (lambda data: nested_mains.impurity(data, U, symmetrize_quantities = True, alpha=alpha, delta=delta, automatic_alpha_and_delta = automatic_alpha_and_delta, 
-                                                               n_cycles=n_cycles, max_times = max_times, solver_data_package = solver_data_package, bosonic_measures=not freeze_Uweiss ))
+                                                               n_cycles=n_cycles, max_times = max_times, solver_data_package = solver_data_package, bosonic_measures=not freeze_Uweiss, Cs= used_Cs ))
                            if (not use_cthyb) else
                            (lambda data: nested_mains.impurity_cthyb(data, U, symmetrize_quantities = True, n_cycles=n_cycles, max_times = max_times, solver_data_package = solver_data_package )),
                     mixers = [], cautionaries = [lambda data,it: local_nan_cautionary(data, data.impurity_struct, Qs = ['Sigma_imp_iw'], raise_exception = True),                                                 
                                                  lambda data,it: ( symmetric_G_and_self_energy_on_impurity(data.G_imp_iw, data.Sigma_imp_iw, data.solvers, 
                                                                                                            identical_pairs_Sigma, identical_pairs_G,
                                                                                                            across_imps=True, identical_pairs_G_ai=identical_pairs_G_ai  )
-                                                                   if it>=0 else  
+                                                                   if it>=10000 else  
                                                                    symmetrize_cluster_impurity(data.Sigma_imp_iw, identical_pairs_Sigma) )
                                                 ], allowed_errors = [1],    
                     printout = lambda data, it: ( [ data.dump_general( quantities = ['Sigma_imp_iw','G_imp_iw'], suffix='-current' ),
                                                     data.dump_solvers(suffix='-current')
                                                   ] if ((it+1) % print_current==0) else None)  ),
                 generic_action(  name = "post_impurity",
-                    main = lambda data: nested_edmft_mains.post_impurity(data, identical_pairs = identical_pairs_Sigma),#, homogeneous_pairs = identical_pairs_G), 
+                    main = lambda data: nested_edmft_mains.post_impurity(data, identical_pairs = identical_pairs_Sigma, Cs= used_Cs),#, homogeneous_pairs = identical_pairs_G), 
                     mixers = [], cautionaries = [], allowed_errors = [],    
                     printout = lambda data, it: (data.dump_general( quantities = ['chi_imp_iw','P_imp_iw','W_imp_iw'], suffix='-current' ) if ((it+1) % print_current==0) else None) ),
                 generic_action(  name = "selfenergy",
@@ -344,19 +347,33 @@ def nested_edmft_calculation( clusters, nested_struct_archive_name = None, flexi
 
     if (counter==0): #do the initial guess only once!         
       if initial_guess_archive_name!='':
-        start_from_action_index = 0 # here decide, maybe start from 2
-        if mpi.is_master_node(): print "constructing dt from initial guess in a file: ",initial_guess_archive_name, "suffix: ",suffix
-        old_epsilonk = dt.epsilonk
-        dt.construct_from_file(initial_guess_archive_name, suffix) 
-        if dt.beta != beta:
-          assert False, "chaning beta not implemented"
-          dt.change_beta(beta, n_iw)
-        if dt.n_k != nk:
-          assert False, "chaning n_k not implemented"
-          dt.change_ks(IBZ.k_grid(nk))
-        if mpi.is_master_node(): print "putting back the old Jq and epsilonk"
-        dt.epsilonk = old_epsilonk
-        dt.dump_general( quantities = ['Sigmakw','Sigma_imp_iw'], suffix='-initial' )  
+        if selfenergy_initial:
+          start_from_action_index = 0
+          if mpi.is_master_node(): print "Taking Sigma from initial guess in:",initial_guess_archive_name, "suffix: ",suffix
+          HDFA = HDFArchive(initial_guess_archive_name,'r')                
+          dt.Sigmakw = deepcopy(HDFA['Sigmakw%s'%suffix])
+          dt.Sigma_imp_iw << HDFA['Sigma_imp_iw%s'%suffix]
+          dt.mus = HDFA['mus%s'%suffix]
+          del HDFA
+          dt.dump_general( quantities = ['Sigmakw','Sigma_imp_iw'], suffix='-initial' )  
+        elif bath_initial:
+          start_from_action_index = 2
+          if mpi.is_master_node(): print "Taking Gweiss from initial guess in:",initial_guess_archive_name, "suffix: ",suffix
+          HDFA = HDFArchive(initial_guess_archive_name,'r')                
+          input_blocks = [C for C,gw in HDFA['Gweiss_iw%s'%suffix]]  
+          if set(input_blocks)!=set(impurity_struct.keys()): 
+            used_Cs[:]=input_blocks[:]
+            print "WARNING: input block structure does not correspond to the nested scheme block structure. Running only the impurities in the input block set."
+          for C,gw in HDFA['Gweiss_iw%s'%suffix]: 
+            dt.Gweiss_iw[C] << gw 
+          dt.mus = HDFA['mus%s'%suffix]
+          for C in impurity_struct.keys(): #in any case fill Uweiss for P_imp calculation not to crash
+            for A in bosonic_struct:
+              print "dt.Jq[",A,"][0,0]:",dt.Jq[A][0,0]
+              dt.Uweiss_iw[C+'|'+A] << dt.Jq[A][0,0]
+              dt.Uweiss_dyn_iw[C+'|'+A] << 0.0
+          del HDFA
+          dt.dump_general( quantities = ['Gweiss_iw','Uweiss_iw','Uweiss_dyn_iw'], suffix='-initial' )       
       else:
         if not fixed_n:  
           dt.mus['up'] = mutilde
@@ -370,7 +387,7 @@ def nested_edmft_calculation( clusters, nested_struct_archive_name = None, flexi
             print "dt.Jq[",A,"][0,0]:",dt.Jq[A][0,0]
             dt.Uweiss_iw['1x1|'+A] << dt.Jq[A][0,0]
             dt.Uweiss_dyn_iw['1x1|'+A] << 0.0
-          dt.Gweiss_iw['1x1'] << inverse(iOmega_n+U/2.0-Wilson(1.0))
+          dt.Gweiss_iw['1x1'] << inverse(iOmega_n+U/2.0-Wilson(0.25))
           dt.dump_general( quantities = ['Gweiss_iw','Uweiss_iw','Uweiss_dyn_iw'], suffix='-initial' )  
         else: 
           for C in dt.impurity_struct.keys():
